@@ -27,7 +27,7 @@ const emptyForm = {
 const attColor = { Present: 'bg-green-100 text-green-700', Absent: 'bg-red-100 text-red-700', Excused: 'bg-amber-100 text-amber-700', Late: 'bg-blue-100 text-blue-700' };
 
 export default function Sessions() {
-  const { sessions, programs, trainers, employees, enrolments, addSession, updateSession, deleteSession, sessionNotes, saveSessionNote, sessionAttendance, saveAttendance, bulkSaveAttendance } = useData();
+  const { sessions, programs, trainers, employees, enrolments, addSession, updateSession, deleteSession, sessionNotes, saveSessionNote, sessionAttendance, saveAttendance, bulkSaveAttendance, batches, addBatch, batchMembers, bulkAddBatchMembers, sessionAssignments, bulkAssignToSession, removeSessionAssignment, assignBatchToSession } = useData();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterTrainer, setFilterTrainer] = useState('');
@@ -42,6 +42,10 @@ export default function Sessions() {
   const [savingAtt, setSavingAtt] = useState(false);
   const [localAttendance, setLocalAttendance] = useState({});
   const [toast, setToast] = useState('');
+  const [assignModal, setAssignModal] = useState(false);
+  const [batchModal, setBatchModal] = useState(false);
+  const [batchForm, setBatchForm] = useState({ name: '', description: '' });
+  const [selectedEmpIds, setSelectedEmpIds] = useState(new Set());
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -119,10 +123,64 @@ export default function Sessions() {
     setLocalAttendance(prev => ({ ...prev, [empId]: { ...prev[empId], status, notes: prev[empId]?.notes || '' } }));
   };
 
-  // Get enrolled employees for a session's program
+  // Get employees for a session: assigned employees if any, else fall back to all program enrollees
   const getSessionEmployees = (sess) => {
+    const assigned = sessionAssignments.filter(a => a.sessionId === sess.id);
+    if (assigned.length > 0) {
+      return assigned.map(a => employees.find(emp => emp.id === a.empId)).filter(Boolean);
+    }
     const progEnrolments = enrolments.filter(e => e.programId === sess.programId);
     return progEnrolments.map(e => employees.find(emp => emp.id === e.empId)).filter(Boolean);
+  };
+
+  const hasAssignments = (sessId) => sessionAssignments.some(a => a.sessionId === sessId);
+
+  // Get enrollees NOT yet assigned to this session (for the assign modal)
+  const getUnassignedEmployees = (sess) => {
+    const assigned = new Set(sessionAssignments.filter(a => a.sessionId === sess.id).map(a => a.empId));
+    const progEnrolments = enrolments.filter(e => e.programId === sess.programId);
+    return progEnrolments.map(e => employees.find(emp => emp.id === e.empId)).filter(emp => emp && !assigned.has(emp.id));
+  };
+
+  const getSessionBatches = (sess) => {
+    const batchIds = new Set(sessionAssignments.filter(a => a.sessionId === sess.id && a.batchId).map(a => a.batchId));
+    return batches.filter(b => batchIds.has(b.id));
+  };
+
+  const getProgramBatches = (programId) => batches.filter(b => b.programId === programId);
+
+  const handleAssignEmployees = async () => {
+    if (!detailSession || selectedEmpIds.size === 0) return;
+    await bulkAssignToSession(detailSession.id, Array.from(selectedEmpIds), null);
+    setSelectedEmpIds(new Set());
+    setAssignModal(false);
+    showToast(`Assigned ${selectedEmpIds.size} employees`);
+  };
+
+  const handleRemoveAssignment = async (empId) => {
+    if (!detailSession) return;
+    const asg = sessionAssignments.find(a => a.sessionId === detailSession.id && a.empId === empId);
+    if (asg && confirm('Remove this employee from this session?')) {
+      await removeSessionAssignment(asg.id);
+      showToast('Removed from session');
+    }
+  };
+
+  const handleAssignBatch = async (batchId) => {
+    if (!detailSession) return;
+    const result = await assignBatchToSession(detailSession.id, batchId);
+    showToast(`Assigned batch (${result.count} new employees)`);
+  };
+
+  const handleCreateBatch = async (e) => {
+    e.preventDefault();
+    if (!detailSession) return;
+    const prog = programs.find(p => p.id === detailSession.programId);
+    const result = await addBatch({ ...batchForm, id: `BA${Date.now()}`, programId: prog?.id || null });
+    if (result?.error) { alert(`Failed: ${result.error.message}`); return; }
+    setBatchModal(false);
+    setBatchForm({ name: '', description: '' });
+    showToast('Batch created');
   };
 
   const exportAttendance = () => {
@@ -298,21 +356,50 @@ ${getSessionEmployees(detailSession).map(emp => {
             </div>
           </div>
 
-          {/* RIGHT: Attendance */}
-          <div className="lg:col-span-2">
+          {/* RIGHT: Attendance + Assignments */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Assignment controls */}
+            <div className="bg-white rounded-xl border p-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                    <Users className="w-4 h-4 text-indigo-500" />
+                    {hasAssignments(sess.id)
+                      ? `${enrolledEmps.length} assigned to this session`
+                      : `${enrolledEmps.length} from program (no specific assignments yet)`
+                    }
+                  </h3>
+                  {getSessionBatches(sess).length > 0 && (
+                    <div className="flex gap-1.5 mt-1.5">{getSessionBatches(sess).map(b => (
+                      <span key={b.id} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">{b.name}</span>
+                    ))}</div>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { setSelectedEmpIds(new Set()); setAssignModal(true); }} className="flex items-center gap-1.5 border border-indigo-300 text-indigo-700 px-3 py-1.5 rounded-lg text-xs hover:bg-indigo-50">
+                    <Plus className="w-3.5 h-3.5" /> Assign People
+                  </button>
+                  {getProgramBatches(sess.programId).length > 0 && (
+                    <select onChange={e => { if (e.target.value) handleAssignBatch(e.target.value); e.target.value = ''; }} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs" defaultValue="">
+                      <option value="" disabled>Assign Batch...</option>
+                      {getProgramBatches(sess.programId).map(b => <option key={b.id} value={b.id}>{b.name} ({batchMembers.filter(m => m.batchId === b.id).length})</option>)}
+                    </select>
+                  )}
+                  <button onClick={() => setBatchModal(true)} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 underline">
+                    + New Batch
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Attendance */}
             <div className="bg-white rounded-xl border">
               <div className="p-4 border-b flex items-center justify-between flex-wrap gap-2">
-                <h3 className="font-semibold text-gray-900 flex items-center gap-2"><ClipboardCheck className="w-4 h-4 text-blue-500" /> Attendance ({enrolledEmps.length} enrolled)</h3>
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2"><ClipboardCheck className="w-4 h-4 text-blue-500" /> Attendance</h3>
                 <div className="flex gap-2 flex-wrap">
-                  <button onClick={exportAttendance} className="flex items-center gap-1.5 border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50">
-                    <Download className="w-3.5 h-3.5" /> CSV
-                  </button>
-                  <button onClick={openDocPreview} className="flex items-center gap-1.5 border border-purple-300 text-purple-700 px-3 py-1.5 rounded-lg text-xs hover:bg-purple-50">
-                    <FileDown className="w-3.5 h-3.5" /> Report
-                  </button>
-                  <button onClick={() => { enrolledEmps.forEach(emp => setAttStatus(emp.id, 'Present')); }} className="flex items-center gap-1.5 border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs hover:bg-green-50">
-                    <Check className="w-3.5 h-3.5" /> All Present
-                  </button>
+                  <button onClick={exportAttendance} className="flex items-center gap-1.5 border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50"><Download className="w-3.5 h-3.5" /> CSV</button>
+                  <button onClick={openDocPreview} className="flex items-center gap-1.5 border border-purple-300 text-purple-700 px-3 py-1.5 rounded-lg text-xs hover:bg-purple-50"><FileDown className="w-3.5 h-3.5" /> Report</button>
+                  <button onClick={() => { enrolledEmps.forEach(emp => setAttStatus(emp.id, 'Present')); }} className="flex items-center gap-1.5 border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs hover:bg-green-50"><Check className="w-3.5 h-3.5" /> All Present</button>
                   <button onClick={handleSaveAllAttendance} disabled={savingAtt} className="flex items-center gap-1.5 bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-800 disabled:opacity-50">
                     {savingAtt ? <Clock className="w-3.5 h-3.5 animate-spin" /> : <ClipboardCheck className="w-3.5 h-3.5" />} Save
                   </button>
@@ -322,8 +409,8 @@ ${getSessionEmployees(detailSession).map(emp => {
               {enrolledEmps.length === 0 ? (
                 <div className="p-8 text-center text-gray-400">
                   <Users className="w-8 h-8 mx-auto mb-2 text-gray-200" />
-                  <p>No employees enrolled in this program yet.</p>
-                  <p className="text-xs mt-1">Enrol employees from the Companies page first.</p>
+                  <p>No employees assigned to this session yet.</p>
+                  <p className="text-xs mt-1">Click "Assign People" above to add employees, or assign a batch.</p>
                 </div>
               ) : (
                 <div className="divide-y">
@@ -356,6 +443,11 @@ ${getSessionEmployees(detailSession).map(emp => {
                           placeholder="Notes..."
                           className="w-32 px-2 py-1 border border-gray-200 rounded text-xs focus:ring-1 focus:ring-blue-400 outline-none"
                         />
+                        {hasAssignments(sess.id) && (
+                          <button onClick={() => handleRemoveAssignment(emp.id)} className="p-1 rounded hover:bg-red-50" title="Remove from session">
+                            <X className="w-3.5 h-3.5 text-red-400" />
+                          </button>
+                        )}
                       </div>
                     );
                   })}
@@ -364,6 +456,66 @@ ${getSessionEmployees(detailSession).map(emp => {
             </div>
           </div>
         </div>
+
+      {/* Assign People Modal */}
+      <Modal open={assignModal} onClose={() => setAssignModal(false)} title="Assign Employees to This Session" wide>
+        {detailSession && (() => {
+          const unassigned = getUnassignedEmployees(detailSession);
+          return (
+            <div className="space-y-4">
+              {unassigned.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">All enrolled employees are already assigned to this session.</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-500">{unassigned.length} enrollees not yet assigned</p>
+                    <button onClick={() => setSelectedEmpIds(new Set(unassigned.map(e => e.id)))} className="text-xs text-blue-600 hover:underline">Select All</button>
+                  </div>
+                  <div className="max-h-[350px] overflow-auto divide-y border rounded-lg">
+                    {unassigned.map(emp => (
+                      <label key={emp.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked={selectedEmpIds.has(emp.id)} onChange={() => {
+                          setSelectedEmpIds(prev => { const n = new Set(prev); n.has(emp.id) ? n.delete(emp.id) : n.add(emp.id); return n; });
+                        }} className="rounded border-gray-300" />
+                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold">{emp.name.charAt(0)}</div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{emp.name}</p>
+                          <p className="text-xs text-gray-400">{emp.department} · {emp.id}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+              <div className="flex justify-end gap-3 pt-3 border-t">
+                <button onClick={() => setAssignModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button onClick={handleAssignEmployees} disabled={selectedEmpIds.size === 0} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+                  Assign {selectedEmpIds.size > 0 ? `(${selectedEmpIds.size})` : ''}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
+
+      {/* Create Batch Modal */}
+      <Modal open={batchModal} onClose={() => setBatchModal(false)} title="Create New Batch">
+        <form onSubmit={handleCreateBatch} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Batch Name</label>
+            <input required value={batchForm.name} onChange={e => setBatchForm({ ...batchForm, name: e.target.value })} placeholder="e.g., Marketing Batch 1" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <input value={batchForm.description} onChange={e => setBatchForm({ ...batchForm, description: e.target.value })} placeholder="Optional" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <p className="text-xs text-gray-400">After creating, go to Companies → Enrolments to add employees to this batch, then assign the batch to sessions.</p>
+          <div className="flex justify-end gap-3 pt-3 border-t">
+            <button type="button" onClick={() => setBatchModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600">Cancel</button>
+            <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium">Create Batch</button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal open={docModal} onClose={() => setDocModal(false)} title="Session Report" wide>
         <div className="space-y-4">

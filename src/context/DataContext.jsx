@@ -15,6 +15,9 @@ export function DataProvider({ children }) {
   const [employeeScores, setEmployeeScores] = useState([]);
   const [sessionNotes, setSessionNotes] = useState([]);
   const [sessionAttendance, setSessionAttendance] = useState([]);
+  const [batches, setBatches] = useState([]);
+  const [batchMembers, setBatchMembers] = useState([]);
+  const [sessionAssignments, setSessionAssignments] = useState([]);
   const [integrationSettings, setIntegrationSettings] = useState([]);
   const [notificationLogs, setNotificationLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +26,7 @@ export function DataProvider({ children }) {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes] = await Promise.all([
+      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes] = await Promise.all([
         supabase.from('employees').select('*').order('name'),
         supabase.from('trainers').select('*').order('name'),
         supabase.from('programs').select('*').order('name'),
@@ -36,6 +39,9 @@ export function DataProvider({ children }) {
         supabase.from('notification_logs').select('*').order('created_at', { ascending: false }).limit(50),
         supabase.from('session_notes').select('*'),
         supabase.from('session_attendance').select('*'),
+        supabase.from('batches').select('*'),
+        supabase.from('batch_members').select('*'),
+        supabase.from('session_assignments').select('*'),
       ]);
 
       const allResults = [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes];
@@ -56,6 +62,9 @@ export function DataProvider({ children }) {
       setEmployeeScores(toCamel(esRes.data || []));
       setSessionNotes(toCamel(snRes.data || []));
       setSessionAttendance(toCamel(saRes.data || []));
+      setBatches(toCamel(baRes.data || []));
+      setBatchMembers(toCamel(bmRes.data || []));
+      setSessionAssignments(toCamel(sasgRes.data || []));
       setIntegrationSettings(toCamel(isRes.data || []));
       setNotificationLogs(toCamel(nlRes.data || []));
 
@@ -217,6 +226,70 @@ export function DataProvider({ children }) {
     return { errors: results.filter(r => r.error) };
   }
 
+  // ---- Batches ----
+  async function addBatch(b) {
+    const { data, error } = await supabase.from('batches').insert(toSnake(b)).select();
+    if (!error && data) setBatches(prev => [...prev, ...toCamel(data)]);
+    return { data: toCamel(data), error };
+  }
+  async function updateBatch(id, updates) {
+    const { data, error } = await supabase.from('batches').update(toSnake(updates)).eq('id', id).select();
+    if (!error && data) setBatches(prev => prev.map(b => b.id === id ? toCamel(data[0]) : b));
+    return { error };
+  }
+  async function deleteBatch(id) {
+    const { error } = await supabase.from('batches').delete().eq('id', id);
+    if (!error) {
+      setBatches(prev => prev.filter(b => b.id !== id));
+      setBatchMembers(prev => prev.filter(m => m.batchId !== id));
+    }
+    return { error };
+  }
+
+  // ---- Batch Members ----
+  async function addBatchMember(batchId, empId) {
+    const { data, error } = await supabase.from('batch_members').insert({ id: `BM${Date.now()}${Math.random().toString(36).slice(2,5)}`, batch_id: batchId, emp_id: empId }).select();
+    if (!error && data) setBatchMembers(prev => [...prev, ...toCamel(data)]);
+    return { error };
+  }
+  async function bulkAddBatchMembers(batchId, empIds) {
+    const rows = empIds.map(empId => ({ id: `BM${Date.now()}${Math.random().toString(36).slice(2,5)}`, batch_id: batchId, emp_id: empId }));
+    const { data, error } = await supabase.from('batch_members').insert(rows).select();
+    if (!error && data) setBatchMembers(prev => [...prev, ...toCamel(data)]);
+    return { count: data?.length || 0, error };
+  }
+  async function removeBatchMember(id) {
+    const { error } = await supabase.from('batch_members').delete().eq('id', id);
+    if (!error) setBatchMembers(prev => prev.filter(m => m.id !== id));
+    return { error };
+  }
+
+  // ---- Session Assignments ----
+  async function assignEmployeeToSession(sessionId, empId, batchId) {
+    const row = { id: `SASG${Date.now()}${Math.random().toString(36).slice(2,5)}`, session_id: sessionId, emp_id: empId, batch_id: batchId || null };
+    const { data, error } = await supabase.from('session_assignments').insert(row).select();
+    if (!error && data) setSessionAssignments(prev => [...prev, ...toCamel(data)]);
+    return { error };
+  }
+  async function bulkAssignToSession(sessionId, empIds, batchId) {
+    const rows = empIds.map(empId => ({ id: `SASG${Date.now()}${Math.random().toString(36).slice(2,5)}`, session_id: sessionId, emp_id: empId, batch_id: batchId || null }));
+    const { data, error } = await supabase.from('session_assignments').insert(rows).select();
+    if (!error && data) setSessionAssignments(prev => [...prev, ...toCamel(data)]);
+    return { count: data?.length || 0, error };
+  }
+  async function removeSessionAssignment(id) {
+    const { error } = await supabase.from('session_assignments').delete().eq('id', id);
+    if (!error) setSessionAssignments(prev => prev.filter(a => a.id !== id));
+    return { error };
+  }
+  async function assignBatchToSession(sessionId, batchId) {
+    const members = batchMembers.filter(m => m.batchId === batchId);
+    const existing = new Set(sessionAssignments.filter(a => a.sessionId === sessionId).map(a => a.empId));
+    const newEmpIds = members.map(m => m.empId).filter(id => !existing.has(id));
+    if (newEmpIds.length === 0) return { count: 0, error: null };
+    return await bulkAssignToSession(sessionId, newEmpIds, batchId);
+  }
+
   // ---- Enrolments ----
   async function addEnrolment(e) {
     const { data, error } = await supabase.from('enrolments').insert(toSnake(e)).select();
@@ -293,6 +366,9 @@ export function DataProvider({ children }) {
     sessions, addSession, updateSession, deleteSession,
     sessionNotes, saveSessionNote,
     sessionAttendance, saveAttendance, bulkSaveAttendance,
+    batches, addBatch, updateBatch, deleteBatch,
+    batchMembers, addBatchMember, bulkAddBatchMembers, removeBatchMember,
+    sessionAssignments, assignEmployeeToSession, bulkAssignToSession, removeSessionAssignment, assignBatchToSession,
     enrolments, addEnrolment, updateEnrolment, deleteEnrolment, bulkAddEnrolments,
     programFiles, addProgramFile, removeProgramFile,
     employeeScores, addEmployeeScore,
