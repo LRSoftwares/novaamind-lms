@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, MapPin, Video, FileText, ChevronLeft, ChevronRight, Calendar, List, GraduationCap, ArrowLeft, StickyNote, ClipboardCheck, Download, Check, X, Clock, Users } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, MapPin, Video, FileText, ChevronLeft, ChevronRight, Calendar, List, GraduationCap, ArrowLeft, StickyNote, ClipboardCheck, Download, Check, X, Clock, Users, Mail, FileDown } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import Modal from '../components/Modal';
 import Papa from 'papaparse';
@@ -146,6 +146,95 @@ export default function Sessions() {
     a.click();
   };
 
+  const [docModal, setDocModal] = useState(false);
+  const [docContent, setDocContent] = useState('');
+
+  const generateDocContent = () => {
+    if (!detailSession) return '';
+    const sess = detailSession;
+    const prog = programs.find(p => p.id === sess.programId);
+    const enrolledEmps = getSessionEmployees(sess);
+    const presentCount = Object.values(localAttendance).filter(a => a.status === 'Present' || a.status === 'Late').length;
+    const absentCount = Object.values(localAttendance).filter(a => a.status === 'Absent').length;
+
+    let doc = `SESSION REPORT\n${'='.repeat(50)}\n\n`;
+    doc += `Program: ${prog?.name || 'N/A'}\n`;
+    doc += `Date: ${sess.sessionDate}\n`;
+    doc += `Time: ${sess.startTime} - ${sess.endTime}\n`;
+    doc += `Type: ${sess.sessionType}\n`;
+    doc += `Venue: ${sess.venue || sess.zoomLink || 'N/A'}\n`;
+    doc += `Trainer: ${getTrainerName(sess.trainerId)}\n`;
+    doc += `Status: ${sess.status}\n\n`;
+
+    doc += `ATTENDANCE SUMMARY\n${'-'.repeat(50)}\n`;
+    doc += `Total Enrolled: ${enrolledEmps.length}\n`;
+    doc += `Present: ${presentCount}\n`;
+    doc += `Absent: ${absentCount}\n`;
+    doc += `Attendance Rate: ${enrolledEmps.length > 0 ? Math.round((presentCount / enrolledEmps.length) * 100) : 0}%\n\n`;
+
+    doc += `ATTENDANCE DETAILS\n${'-'.repeat(50)}\n`;
+    doc += `${'Name'.padEnd(25)} ${'Department'.padEnd(15)} ${'Status'.padEnd(10)} Notes\n`;
+    doc += `${'-'.repeat(70)}\n`;
+    enrolledEmps.forEach(emp => {
+      const att = localAttendance[emp.id] || { status: 'Not Marked', notes: '' };
+      doc += `${emp.name.padEnd(25)} ${(emp.department || '').padEnd(15)} ${att.status.padEnd(10)} ${att.notes || ''}\n`;
+    });
+
+    doc += `\nSESSION NOTES\n${'-'.repeat(50)}\n`;
+    doc += notes || '(No notes recorded)\n';
+    doc += `\n\n${'-'.repeat(50)}\nGenerated on ${new Date().toLocaleString()}\nNovaamind LMS`;
+
+    return doc;
+  };
+
+  const openDocPreview = () => {
+    setDocContent(generateDocContent());
+    setDocModal(true);
+  };
+
+  const downloadAsDoc = () => {
+    const content = docContent || generateDocContent();
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>Session Report</title>
+<style>body{font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5}h1{font-size:16pt;color:#1e40af}h2{font-size:13pt;color:#334155;border-bottom:1px solid #e2e8f0;padding-bottom:4px}table{border-collapse:collapse;width:100%;margin:10px 0}th,td{border:1px solid #cbd5e1;padding:6px 10px;text-align:left;font-size:10pt}th{background:#f1f5f9;font-weight:600}.present{color:#16a34a}.absent{color:#dc2626}.late{color:#2563eb}.excused{color:#d97706}pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:6px;font-size:10pt}</style></head>
+<body>
+<h1>Session Report</h1>
+<table>
+<tr><th>Program</th><td>${programs.find(p => p.id === detailSession.programId)?.name || ''}</td><th>Date</th><td>${detailSession.sessionDate}</td></tr>
+<tr><th>Time</th><td>${detailSession.startTime} - ${detailSession.endTime}</td><th>Type</th><td>${detailSession.sessionType}</td></tr>
+<tr><th>Venue</th><td>${detailSession.venue || detailSession.zoomLink || 'N/A'}</td><th>Trainer</th><td>${getTrainerName(detailSession.trainerId)}</td></tr>
+</table>
+<h2>Attendance (${Object.values(localAttendance).filter(a => a.status === 'Present' || a.status === 'Late').length}/${getSessionEmployees(detailSession).length} present)</h2>
+<table><tr><th>Name</th><th>Department</th><th>Status</th><th>Notes</th></tr>
+${getSessionEmployees(detailSession).map(emp => {
+  const att = localAttendance[emp.id] || { status: 'Not Marked', notes: '' };
+  const cls = att.status === 'Present' ? 'present' : att.status === 'Absent' ? 'absent' : att.status === 'Late' ? 'late' : 'excused';
+  return `<tr><td>${emp.name}</td><td>${emp.department || ''}</td><td class="${cls}">${att.status}</td><td>${att.notes || ''}</td></tr>`;
+}).join('')}
+</table>
+<h2>Session Notes</h2>
+<pre>${(notes || '(No notes recorded)').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+<p style="color:#94a3b8;font-size:9pt;margin-top:20px">Generated on ${new Date().toLocaleString()} — Novaamind LMS</p>
+</body></html>`;
+
+    const blob = new Blob([html], { type: 'application/msword' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const prog = programs.find(p => p.id === detailSession.programId);
+    a.download = `Session_Report_${detailSession.sessionDate}_${prog?.shortCode || 'session'}.doc`;
+    a.click();
+  };
+
+  const emailReport = () => {
+    if (!detailSession) return;
+    const prog = programs.find(p => p.id === detailSession.programId);
+    const enrolledEmps = getSessionEmployees(detailSession);
+    const presentCount = Object.values(localAttendance).filter(a => a.status === 'Present' || a.status === 'Late').length;
+    const subject = encodeURIComponent(`Session Report: ${prog?.name || 'Training'} - ${detailSession.sessionDate}`);
+    const body = encodeURIComponent(docContent || generateDocContent());
+    window.open(`mailto:?subject=${subject}&body=${body}`);
+  };
+
   const getProgName = (id) => programs.find(p => p.id === id)?.name || 'Unknown';
   const getProgShortCode = (id) => programs.find(p => p.id === id)?.shortCode || '';
   const getTrainerName = (id) => trainers.find(t => t.id === id)?.name || '-';
@@ -212,17 +301,20 @@ export default function Sessions() {
           {/* RIGHT: Attendance */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-xl border">
-              <div className="p-4 border-b flex items-center justify-between">
+              <div className="p-4 border-b flex items-center justify-between flex-wrap gap-2">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2"><ClipboardCheck className="w-4 h-4 text-blue-500" /> Attendance ({enrolledEmps.length} enrolled)</h3>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button onClick={exportAttendance} className="flex items-center gap-1.5 border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50">
-                    <Download className="w-3.5 h-3.5" /> Export CSV
+                    <Download className="w-3.5 h-3.5" /> CSV
+                  </button>
+                  <button onClick={openDocPreview} className="flex items-center gap-1.5 border border-purple-300 text-purple-700 px-3 py-1.5 rounded-lg text-xs hover:bg-purple-50">
+                    <FileDown className="w-3.5 h-3.5" /> Report
                   </button>
                   <button onClick={() => { enrolledEmps.forEach(emp => setAttStatus(emp.id, 'Present')); }} className="flex items-center gap-1.5 border border-green-300 text-green-700 px-3 py-1.5 rounded-lg text-xs hover:bg-green-50">
-                    <Check className="w-3.5 h-3.5" /> Mark All Present
+                    <Check className="w-3.5 h-3.5" /> All Present
                   </button>
                   <button onClick={handleSaveAllAttendance} disabled={savingAtt} className="flex items-center gap-1.5 bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-800 disabled:opacity-50">
-                    {savingAtt ? <Clock className="w-3.5 h-3.5 animate-spin" /> : <ClipboardCheck className="w-3.5 h-3.5" />} Save Attendance
+                    {savingAtt ? <Clock className="w-3.5 h-3.5 animate-spin" /> : <ClipboardCheck className="w-3.5 h-3.5" />} Save
                   </button>
                 </div>
               </div>
@@ -272,7 +364,26 @@ export default function Sessions() {
             </div>
           </div>
         </div>
-      </div>
+
+      <Modal open={docModal} onClose={() => setDocModal(false)} title="Session Report" wide>
+        <div className="space-y-4">
+          <div className="flex gap-2 mb-3">
+            <button onClick={downloadAsDoc} className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+              <FileDown className="w-4 h-4" /> Download .doc
+            </button>
+            <button onClick={exportAttendance} className="flex items-center gap-1.5 border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
+              <Download className="w-4 h-4" /> Download CSV
+            </button>
+            <button onClick={emailReport} className="flex items-center gap-1.5 border border-blue-300 text-blue-700 px-4 py-2 rounded-lg text-sm hover:bg-blue-50">
+              <Mail className="w-4 h-4" /> Email Report
+            </button>
+          </div>
+          <textarea value={docContent} onChange={e => setDocContent(e.target.value)} rows={22}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-purple-500 outline-none resize-y bg-gray-50" />
+          <p className="text-xs text-gray-400">Edit the report above before downloading or emailing. Changes here are for this export only.</p>
+        </div>
+      </Modal>
+    </div>
     );
   }
 

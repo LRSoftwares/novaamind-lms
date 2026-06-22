@@ -739,7 +739,7 @@ export default function Company() {
           </select></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
           <select required value={bulkEnrolForm.department} onChange={e => setBulkEnrolForm({ ...bulkEnrolForm, department: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none">
-            <option value="">Select</option>{DEPARTMENTS.filter(d => deptCounts[d]).map(d => <option key={d}>{d} ({deptCounts[d]} employees)</option>)}
+            <option value="">Select</option>{DEPARTMENTS.filter(d => deptCounts[d]).map(d => <option key={d} value={d}>{d} ({deptCounts[d]} employees)</option>)}
           </select></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Enrol Date</label>
           <input type="date" value={bulkEnrolForm.enrolDate} onChange={e => setBulkEnrolForm({ ...bulkEnrolForm, enrolDate: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" /></div>
