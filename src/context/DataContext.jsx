@@ -13,6 +13,8 @@ export function DataProvider({ children }) {
   const [companies, setCompanies] = useState([]);
   const [programFiles, setProgramFiles] = useState({});
   const [employeeScores, setEmployeeScores] = useState([]);
+  const [sessionNotes, setSessionNotes] = useState([]);
+  const [sessionAttendance, setSessionAttendance] = useState([]);
   const [integrationSettings, setIntegrationSettings] = useState([]);
   const [notificationLogs, setNotificationLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +23,7 @@ export function DataProvider({ children }) {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes] = await Promise.all([
+      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes] = await Promise.all([
         supabase.from('employees').select('*').order('name'),
         supabase.from('trainers').select('*').order('name'),
         supabase.from('programs').select('*').order('name'),
@@ -32,6 +34,8 @@ export function DataProvider({ children }) {
         supabase.from('employee_scores').select('*'),
         supabase.from('integration_settings').select('*'),
         supabase.from('notification_logs').select('*').order('created_at', { ascending: false }).limit(50),
+        supabase.from('session_notes').select('*'),
+        supabase.from('session_attendance').select('*'),
       ]);
 
       const allResults = [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes];
@@ -50,6 +54,8 @@ export function DataProvider({ children }) {
       setEnrolments(toCamel(enRes.data || []));
       setCompanies(toCamel(coRes.data || []));
       setEmployeeScores(toCamel(esRes.data || []));
+      setSessionNotes(toCamel(snRes.data || []));
+      setSessionAttendance(toCamel(saRes.data || []));
       setIntegrationSettings(toCamel(isRes.data || []));
       setNotificationLogs(toCamel(nlRes.data || []));
 
@@ -174,6 +180,43 @@ export function DataProvider({ children }) {
     return { error };
   }
 
+  // ---- Session Notes ----
+  async function saveSessionNote(sessionId, content) {
+    const existing = sessionNotes.find(n => n.sessionId === sessionId);
+    if (existing) {
+      const { data, error } = await supabase.from('session_notes').update({ content, updated_at: new Date().toISOString() }).eq('id', existing.id).select();
+      if (!error && data) setSessionNotes(prev => prev.map(n => n.id === existing.id ? toCamel(data[0]) : n));
+      return { error };
+    } else {
+      const { data, error } = await supabase.from('session_notes').insert({ id: `SN${Date.now()}`, session_id: sessionId, content }).select();
+      if (!error && data) setSessionNotes(prev => [...prev, ...toCamel(data)]);
+      return { error };
+    }
+  }
+
+  // ---- Session Attendance ----
+  async function saveAttendance(sessionId, empId, status, notes) {
+    const existing = sessionAttendance.find(a => a.sessionId === sessionId && a.empId === empId);
+    if (existing) {
+      const { data, error } = await supabase.from('session_attendance').update(toSnake({ status, notes })).eq('id', existing.id).select();
+      if (!error && data) setSessionAttendance(prev => prev.map(a => a.id === existing.id ? toCamel(data[0]) : a));
+      return { error };
+    } else {
+      const row = { id: `SA${Date.now()}${Math.random().toString(36).slice(2, 5)}`, session_id: sessionId, emp_id: empId, status, notes: notes || '' };
+      const { data, error } = await supabase.from('session_attendance').insert(row).select();
+      if (!error && data) setSessionAttendance(prev => [...prev, ...toCamel(data)]);
+      return { error };
+    }
+  }
+  async function bulkSaveAttendance(records) {
+    const results = [];
+    for (const r of records) {
+      const res = await saveAttendance(r.sessionId, r.empId, r.status, r.notes);
+      results.push(res);
+    }
+    return { errors: results.filter(r => r.error) };
+  }
+
   // ---- Enrolments ----
   async function addEnrolment(e) {
     const { data, error } = await supabase.from('enrolments').insert(toSnake(e)).select();
@@ -248,6 +291,8 @@ export function DataProvider({ children }) {
     trainers, addTrainer, updateTrainer, deleteTrainer,
     programs, addProgram, updateProgram, deleteProgram,
     sessions, addSession, updateSession, deleteSession,
+    sessionNotes, saveSessionNote,
+    sessionAttendance, saveAttendance, bulkSaveAttendance,
     enrolments, addEnrolment, updateEnrolment, deleteEnrolment, bulkAddEnrolments,
     programFiles, addProgramFile, removeProgramFile,
     employeeScores, addEmployeeScore,
