@@ -104,6 +104,7 @@ export default function Company() {
   const [editingEnrol, setEditingEnrol] = useState(null);
   const [enrolSearch, setEnrolSearch] = useState('');
   const [enrolFilterStatus, setEnrolFilterStatus] = useState('');
+  const [selectedEnrolIds, setSelectedEnrolIds] = useState(new Set());
 
   const filteredEmps = useMemo(() =>
     companyEmployees.filter(e => {
@@ -542,7 +543,23 @@ export default function Company() {
       {tab === 'enrolments' && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-gray-500">{companyEnrolments.length} enrolments for {selectedCompany?.name}</p>
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-gray-500">{companyEnrolments.length} enrolments for {selectedCompany?.name}</p>
+              {selectedEnrolIds.size > 0 && (
+                <button onClick={async () => {
+                  const count = selectedEnrolIds.size;
+                  const names = enrichedEnrolments.filter(e => selectedEnrolIds.has(e.id)).map(e => e.empName).slice(0, 5).join(', ');
+                  const more = count > 5 ? ` and ${count - 5} more` : '';
+                  if (confirm(`Are you sure you want to remove ${count} enrolment${count > 1 ? 's' : ''}?\n\n${names}${more}\n\nThis will remove them from their programs. Attendance records and session assignments will remain.`)) {
+                    for (const id of selectedEnrolIds) { await deleteEnrolment(id); }
+                    setSelectedEnrolIds(new Set());
+                    showToast(`Removed ${count} enrolment${count > 1 ? 's' : ''}`);
+                  }
+                }} className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium">
+                  <Trash2 className="w-3.5 h-3.5" /> Delete Selected ({selectedEnrolIds.size})
+                </button>
+              )}
+            </div>
             <div className="flex gap-2">
               <button onClick={() => { setBulkEnrolForm({ programId: '', department: '', enrolDate: new Date().toISOString().split('T')[0] }); setBulkEnrolModal(true); }} className="flex items-center gap-2 border border-blue-300 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-50"><Users className="w-3.5 h-3.5" /> Bulk Enrol</button>
               <button onClick={openNewEnrol} className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium"><Plus className="w-3.5 h-3.5" /> New Enrolment</button>
@@ -562,6 +579,16 @@ export default function Company() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="text-left text-xs text-gray-500 uppercase border-b bg-gray-50">
+                  <th className="px-4 py-3 font-medium w-10">
+                    <input type="checkbox"
+                      checked={enrichedEnrolments.length > 0 && selectedEnrolIds.size === enrichedEnrolments.length}
+                      onChange={() => {
+                        if (selectedEnrolIds.size === enrichedEnrolments.length) setSelectedEnrolIds(new Set());
+                        else setSelectedEnrolIds(new Set(enrichedEnrolments.map(e => e.id)));
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                  </th>
                   <th className="px-4 py-3 font-medium">Employee</th>
                   <th className="px-4 py-3 font-medium">Program</th>
                   <th className="px-4 py-3 font-medium">Enrolled</th>
@@ -571,7 +598,12 @@ export default function Company() {
                   <th className="px-4 py-3 font-medium">Actions</th>
                 </tr></thead>
                 <tbody>{enrichedEnrolments.map(enr => (
-                  <tr key={enr.id} className="border-b last:border-0 hover:bg-gray-50">
+                  <tr key={enr.id} className={`border-b last:border-0 hover:bg-gray-50 ${selectedEnrolIds.has(enr.id) ? 'bg-blue-50' : ''}`}>
+                    <td className="px-4 py-3">
+                      <input type="checkbox" checked={selectedEnrolIds.has(enr.id)} onChange={() => {
+                        setSelectedEnrolIds(prev => { const n = new Set(prev); n.has(enr.id) ? n.delete(enr.id) : n.add(enr.id); return n; });
+                      }} className="rounded border-gray-300" />
+                    </td>
                     <td className="px-4 py-3"><p className="text-sm font-medium text-gray-900">{enr.empName}</p><p className="text-xs text-gray-400">{enr.department}</p></td>
                     <td className="px-4 py-3 text-sm text-gray-600">{enr.progName}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{enr.enrolDate}</td>
