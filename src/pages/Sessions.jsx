@@ -35,7 +35,7 @@ export default function Sessions() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [view, setView] = useState('calendar');
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 1));
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [detailSession, setDetailSession] = useState(null);
   const [notes, setNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
