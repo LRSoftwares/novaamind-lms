@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
-import { Plus, Edit2, Trash2, Search, FileUp, X, FileText, Image, File, ChevronDown, ChevronUp, Target } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, FileUp, X, FileText, Image, File, ChevronDown, ChevronUp, Target, Link2, Loader2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import Modal from '../components/Modal';
 
@@ -45,7 +45,13 @@ export default function Programs() {
   const [form, setForm] = useState(emptyForm);
   const [expandedProg, setExpandedProg] = useState(null);
   const fileRef = useRef();
+  const modalFileRef = useRef();
   const [uploadingFor, setUploadingFor] = useState(null);
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [pendingUrls, setPendingUrls] = useState([]);
+  const [urlInput, setUrlInput] = useState('');
+  const [urlLabel, setUrlLabel] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const filtered = useMemo(() =>
     programs.filter(p =>
@@ -56,6 +62,10 @@ export default function Programs() {
   const openNew = () => {
     setForm({ ...emptyForm, learningOutcomes: [''] });
     setEditing(null);
+    setPendingFiles([]);
+    setPendingUrls([]);
+    setUrlInput('');
+    setUrlLabel('');
     setModalOpen(true);
   };
   const openEdit = (prog) => {
@@ -65,27 +75,51 @@ export default function Programs() {
       learningOutcomes: prog.learningOutcomes?.length ? prog.learningOutcomes : [''],
     });
     setEditing(prog.id);
+    setPendingFiles([]);
+    setPendingUrls([]);
+    setUrlInput('');
+    setUrlLabel('');
     setModalOpen(true);
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
+    setSaving(true);
     const cleaned = {
       ...form,
       learningOutcomes: form.learningOutcomes.filter(o => o.trim()),
       trainerId: form.trainerId || null,
       coTrainerId: form.coTrainerId || null,
+      urls: form.urls || [],
     };
+
+    let programId = editing;
     let result;
     if (editing) {
-      result = await updateProgram(editing, cleaned);
+      // Save URLs as part of program data
+      const urlsToSave = [...(cleaned.urls || []), ...pendingUrls];
+      result = await updateProgram(editing, { ...cleaned, urls: urlsToSave });
     } else {
-      result = await addProgram({ ...cleaned, id: `P${Date.now()}` });
+      programId = `P${Date.now()}`;
+      const urlsToSave = [...pendingUrls];
+      result = await addProgram({ ...cleaned, id: programId, urls: urlsToSave });
     }
     if (result?.error) {
       alert(`Failed to save program: ${result.error.message}`);
+      setSaving(false);
       return;
     }
+
+    // Upload pending files
+    if (pendingFiles.length > 0 && programId) {
+      for (const file of pendingFiles) {
+        await addProgramFile(programId, file);
+      }
+    }
+
+    setPendingFiles([]);
+    setPendingUrls([]);
+    setSaving(false);
     setModalOpen(false);
   };
 
@@ -286,6 +320,21 @@ export default function Programs() {
                             })}
                           </div>
                         )}
+
+                        {/* URL Links */}
+                        {prog.urls?.length > 0 && (
+                          <div className="mt-3">
+                            <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Links</h4>
+                            <div className="space-y-1">
+                              {prog.urls.map((u, i) => (
+                                <a key={i} href={u.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs text-purple-600 hover:text-purple-800 hover:underline p-1.5 rounded hover:bg-purple-50">
+                                  <Link2 className="w-3.5 h-3.5 flex-shrink-0" />
+                                  <span className="truncate">{u.label}</span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -394,9 +443,93 @@ export default function Programs() {
               </select>
             </div>
           </div>
+          {/* Files & URLs */}
+          <div className="border-t pt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Program Materials</label>
+            <div className="grid grid-cols-2 gap-4">
+              {/* File upload */}
+              <div>
+                <input type="file" ref={modalFileRef} multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,.mp4,.zip" onChange={e => {
+                  const files = Array.from(e.target.files);
+                  if (files.length) setPendingFiles(prev => [...prev, ...files]);
+                  e.target.value = '';
+                }} className="hidden" />
+                <button type="button" onClick={() => modalFileRef.current?.click()}
+                  className="w-full border-2 border-dashed border-gray-200 rounded-lg p-4 text-center hover:border-blue-300 hover:bg-blue-50/30 transition-colors">
+                  <FileUp className="w-6 h-6 text-gray-300 mx-auto mb-1" />
+                  <p className="text-xs text-gray-500">Click to add files</p>
+                  <p className="text-xs text-gray-300">PDF, PPT, DOCX, images, etc.</p>
+                </button>
+                {pendingFiles.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {pendingFiles.map((f, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs bg-blue-50 px-2.5 py-1.5 rounded-lg">
+                        <span className="truncate text-blue-700">{f.name} <span className="text-blue-400">({(f.size / 1024).toFixed(0)} KB)</span></span>
+                        <button type="button" onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))} className="p-0.5 hover:bg-blue-100 rounded"><X className="w-3 h-3 text-blue-400" /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Existing files (when editing) */}
+                {editing && (programFiles[editing] || []).length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {(programFiles[editing] || []).map(f => (
+                      <div key={f.id} className="flex items-center justify-between text-xs bg-gray-50 px-2.5 py-1.5 rounded-lg">
+                        <span className="truncate text-gray-700 cursor-pointer hover:text-blue-600" onClick={() => downloadFile(f)}>{f.name}</span>
+                        <button type="button" onClick={() => handleRemoveFile(editing, f.id)} className="p-0.5 hover:bg-red-50 rounded"><X className="w-3 h-3 text-red-400" /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* URL links */}
+              <div>
+                <div className="flex gap-2 mb-2">
+                  <input value={urlLabel} onChange={e => setUrlLabel(e.target.value)} placeholder="Label (e.g., Course Slides)" className="flex-1 px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Link2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                    <input value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="https://..." className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                      onKeyDown={e => { if (e.key === 'Enter' && urlInput.trim()) { e.preventDefault(); setPendingUrls(prev => [...prev, { label: urlLabel || urlInput, url: urlInput }]); setUrlInput(''); setUrlLabel(''); } }} />
+                  </div>
+                  <button type="button" onClick={() => { if (urlInput.trim()) { setPendingUrls(prev => [...prev, { label: urlLabel || urlInput, url: urlInput }]); setUrlInput(''); setUrlLabel(''); } }}
+                    className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs hover:bg-gray-200 font-medium">Add</button>
+                </div>
+                {/* Pending URLs */}
+                {pendingUrls.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {pendingUrls.map((u, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs bg-purple-50 px-2.5 py-1.5 rounded-lg">
+                        <div className="truncate"><span className="text-purple-700 font-medium">{u.label}</span> <span className="text-purple-400 truncate">{u.url.length > 30 ? u.url.slice(0, 30) + '...' : u.url}</span></div>
+                        <button type="button" onClick={() => setPendingUrls(prev => prev.filter((_, idx) => idx !== i))} className="p-0.5 hover:bg-purple-100 rounded"><X className="w-3 h-3 text-purple-400" /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Existing URLs (when editing) */}
+                {editing && form.urls?.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {form.urls.map((u, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs bg-gray-50 px-2.5 py-1.5 rounded-lg">
+                        <a href={u.url} target="_blank" rel="noreferrer" className="truncate text-purple-600 hover:underline">{u.label}</a>
+                        <button type="button" onClick={() => setForm(f => ({ ...f, urls: f.urls.filter((_, idx) => idx !== i) }))} className="p-0.5 hover:bg-red-50 rounded"><X className="w-3 h-3 text-red-400" /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-3 pt-3 border-t">
             <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button type="submit" className="px-4 py-2 bg-blue-700 text-white rounded-lg text-sm font-medium hover:bg-blue-800">{editing ? 'Update' : 'Create'} Program</button>
+            <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-700 text-white rounded-lg text-sm font-medium hover:bg-blue-800 disabled:opacity-50 flex items-center gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {editing ? 'Update' : 'Create'} Program
+              {pendingFiles.length > 0 && ` + ${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''}`}
+            </button>
           </div>
         </form>
       </Modal>
