@@ -202,31 +202,29 @@ export default function Programs() {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 mb-4">
-        <div className="p-4 border-b">
+      <div className="mb-4">
+        <div className="mb-4">
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search programs..." className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search programs..." className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
           </div>
         </div>
 
         <input type="file" ref={fileRef} multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,.mp4,.zip" onChange={handleFileUpload} className="hidden" />
 
-        <div className="divide-y">
+        <div className="space-y-3">
           {filtered.map(prog => {
             const isExpanded = expandedProg === prog.id;
             const files = programFiles[prog.id] || [];
             const urlCount = prog.urls?.length || 0;
             const totalMaterials = files.length + urlCount;
+            const accentColor = prog.status === 'Active' ? 'border-l-green-500' : prog.status === 'Upcoming' ? 'border-l-blue-500' : prog.status === 'Completed' ? 'border-l-gray-400' : 'border-l-amber-500';
 
             return (
-              <div key={prog.id} className={isExpanded ? 'bg-slate-50' : ''}>
-                {/* Row */}
-                <div className="flex items-center hover:bg-gray-50/80 transition-colors cursor-pointer" onClick={() => setExpandedProg(isExpanded ? null : prog.id)}>
-                  <div className="p-4 flex-shrink-0">
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-blue-500" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                  </div>
-                  <div className="flex-1 py-3 flex items-center gap-4 min-w-0 pr-4">
+              <div key={prog.id} className={`bg-white rounded-xl border transition-all duration-200 ${isExpanded ? `shadow-lg border-l-4 ${accentColor}` : 'hover:shadow-md hover:-translate-y-0.5'}`}>
+                {/* Card Row */}
+                <div className="flex items-center cursor-pointer px-5 py-4" onClick={() => setExpandedProg(isExpanded ? null : prog.id)}>
+                  <div className="flex-1 flex items-center gap-4 min-w-0">
                     {/* Name + code */}
                     <div className="min-w-[180px] flex-shrink-0">
                       <p className="text-sm font-semibold text-gray-900">{prog.name}</p>
@@ -251,16 +249,16 @@ export default function Programs() {
                     <span className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${statusColor[prog.status] || ''}`}>{prog.status}</span>
                     {/* Actions */}
                     <div className="flex gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                      <button onClick={() => openEdit(prog)} className="p-1.5 rounded hover:bg-gray-200" title="Edit"><Edit2 className="w-4 h-4 text-gray-500" /></button>
-                      <button onClick={() => { setUploadingFor(prog.id); fileRef.current?.click(); }} className="p-1.5 rounded hover:bg-blue-100" title="Upload files"><FileUp className="w-4 h-4 text-blue-500" /></button>
-                      <button onClick={() => handleDelete(prog.id)} className="p-1.5 rounded hover:bg-red-100" title="Delete"><Trash2 className="w-4 h-4 text-red-400" /></button>
+                      <button onClick={() => openEdit(prog)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="Edit"><Edit2 className="w-4 h-4 text-gray-500" /></button>
+                      <button onClick={() => { setUploadingFor(prog.id); fileRef.current?.click(); }} className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors" title="Upload files"><FileUp className="w-4 h-4 text-blue-500" /></button>
+                      <button onClick={() => handleDelete(prog.id)} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Delete"><Trash2 className="w-4 h-4 text-red-400" /></button>
                     </div>
                   </div>
                 </div>
 
                 {/* Expanded Detail Panel */}
                 {isExpanded && (
-                  <div className="px-6 pb-5">
+                  <div className="px-5 pb-5 border-t border-gray-100">
                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
                       <div className="grid grid-cols-1 lg:grid-cols-3">
                         {/* Left: Summary + Outcomes */}
@@ -346,7 +344,7 @@ export default function Programs() {
               </div>
             );
           })}
-          {filtered.length === 0 && <div className="text-center py-12 text-gray-400">No programs found</div>}
+          {filtered.length === 0 && <div className="text-center py-12 text-gray-400 bg-white rounded-xl border">No programs found</div>}
         </div>
       </div>
 
