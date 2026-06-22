@@ -216,125 +216,129 @@ export default function Programs() {
           {filtered.map(prog => {
             const isExpanded = expandedProg === prog.id;
             const files = programFiles[prog.id] || [];
-            const FileIcon = FileText;
+            const urlCount = prog.urls?.length || 0;
+            const totalMaterials = files.length + urlCount;
 
             return (
-              <div key={prog.id}>
-                <div className="flex items-center hover:bg-gray-50 transition-colors">
-                  <button onClick={() => setExpandedProg(isExpanded ? null : prog.id)} className="p-4 flex-shrink-0">
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                  </button>
-
-                  <div className="flex-1 py-3 grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] items-center gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{prog.name}</p>
-                      <p className="text-xs text-gray-400">{prog.shortCode} · {files.length} file{files.length !== 1 ? 's' : ''}</p>
+              <div key={prog.id} className={isExpanded ? 'bg-slate-50' : ''}>
+                {/* Row */}
+                <div className="flex items-center hover:bg-gray-50/80 transition-colors cursor-pointer" onClick={() => setExpandedProg(isExpanded ? null : prog.id)}>
+                  <div className="p-4 flex-shrink-0">
+                    {isExpanded ? <ChevronUp className="w-4 h-4 text-blue-500" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                  </div>
+                  <div className="flex-1 py-3 flex items-center gap-4 min-w-0 pr-4">
+                    {/* Name + code */}
+                    <div className="min-w-[180px] flex-shrink-0">
+                      <p className="text-sm font-semibold text-gray-900">{prog.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-gray-400">{prog.shortCode}</span>
+                        {totalMaterials > 0 && <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{totalMaterials} material{totalMaterials > 1 ? 's' : ''}</span>}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-1">
+                    {/* Departments */}
+                    <div className="flex flex-wrap gap-1 flex-1 min-w-0">
                       {prog.departmentTarget?.map(d => (
                         <span key={d} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{d}</span>
                       ))}
                     </div>
-                    <span className="text-sm text-gray-600">{prog.sessionsRequired} sessions</span>
-                    <span className="text-sm text-gray-600">{prog.passScoreThreshold}%</span>
-                    <span className="text-sm text-gray-600">{getEnrolCount(prog.id)} enrolled</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[prog.status] || ''}`}>{prog.status}</span>
-                    <div className="flex gap-1 pr-4">
-                      <button onClick={() => openEdit(prog)} className="p-1.5 rounded hover:bg-gray-100"><Edit2 className="w-4 h-4 text-gray-500" /></button>
-                      <button onClick={() => { setUploadingFor(prog.id); fileRef.current?.click(); }} className="p-1.5 rounded hover:bg-blue-50"><FileUp className="w-4 h-4 text-blue-500" /></button>
-                      <button onClick={() => handleDelete(prog.id)} className="p-1.5 rounded hover:bg-red-50"><Trash2 className="w-4 h-4 text-red-400" /></button>
+                    {/* Stats */}
+                    <div className="flex items-center gap-5 flex-shrink-0 text-xs text-gray-500">
+                      <div className="text-center"><p className="font-bold text-gray-900 text-sm">{prog.sessionsRequired}</p><p>sessions</p></div>
+                      <div className="text-center"><p className="font-bold text-gray-900 text-sm">{prog.passScoreThreshold}%</p><p>pass</p></div>
+                      <div className="text-center"><p className="font-bold text-blue-600 text-sm">{getEnrolCount(prog.id)}</p><p>enrolled</p></div>
+                    </div>
+                    {/* Status */}
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${statusColor[prog.status] || ''}`}>{prog.status}</span>
+                    {/* Actions */}
+                    <div className="flex gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => openEdit(prog)} className="p-1.5 rounded hover:bg-gray-200" title="Edit"><Edit2 className="w-4 h-4 text-gray-500" /></button>
+                      <button onClick={() => { setUploadingFor(prog.id); fileRef.current?.click(); }} className="p-1.5 rounded hover:bg-blue-100" title="Upload files"><FileUp className="w-4 h-4 text-blue-500" /></button>
+                      <button onClick={() => handleDelete(prog.id)} className="p-1.5 rounded hover:bg-red-100" title="Delete"><Trash2 className="w-4 h-4 text-red-400" /></button>
                     </div>
                   </div>
                 </div>
 
+                {/* Expanded Detail Panel */}
                 {isExpanded && (
-                  <div className="px-12 pb-5 bg-gray-50/50">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Summary & Outcomes */}
-                      <div>
-                        <h4 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-1.5">
-                          <Target className="w-4 h-4 text-blue-600" /> Program Summary
-                        </h4>
-                        {prog.summary ? (
-                          <p className="text-sm text-gray-600 mb-4 bg-white p-3 rounded-lg border">{prog.summary}</p>
-                        ) : (
-                          <p className="text-sm text-gray-400 italic mb-4">No summary added yet. Edit program to add one.</p>
-                        )}
+                  <div className="px-6 pb-5">
+                    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                      <div className="grid grid-cols-1 lg:grid-cols-3">
+                        {/* Left: Summary + Outcomes */}
+                        <div className="p-5 lg:col-span-2 lg:border-r">
+                          {prog.summary ? (
+                            <div className="mb-4">
+                              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Summary</h4>
+                              <p className="text-sm text-gray-700 leading-relaxed">{prog.summary}</p>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-300 italic mb-4">No summary — <button onClick={() => openEdit(prog)} className="text-blue-500 hover:underline">add one</button></p>
+                          )}
 
-                        {prog.learningOutcomes?.filter(o => o).length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-semibold text-gray-900 mb-2">What participants will achieve</h4>
-                            <ul className="space-y-1.5">
-                              {prog.learningOutcomes.filter(o => o).map((outcome, i) => (
-                                <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold mt-0.5">{i + 1}</span>
-                                  {outcome}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        <div className="mt-3 text-xs text-gray-400">
-                          <span>Trainer: {getTrainerName(prog.trainerId)}</span>
-                          {prog.coTrainerId && <span> · Co-trainer: {getTrainerName(prog.coTrainerId)}</span>}
-                          {prog.startDate && <span> · {prog.startDate} to {prog.endDate}</span>}
-                        </div>
-                      </div>
-
-                      {/* Files */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="text-sm font-semibold text-gray-900">Program Files</h4>
-                          <button onClick={() => { setUploadingFor(prog.id); fileRef.current?.click(); }} className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
-                            <FileUp className="w-3 h-3" /> Add Files
-                          </button>
-                        </div>
-                        {files.length === 0 ? (
-                          <div
-                            className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
-                            onClick={() => { setUploadingFor(prog.id); fileRef.current?.click(); }}
-                          >
-                            <FileUp className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                            <p className="text-sm text-gray-400">Click to upload program materials</p>
-                            <p className="text-xs text-gray-300 mt-1">PDF, PPT, DOCX, images, etc.</p>
-                          </div>
-                        ) : (
-                          <div className="space-y-2 max-h-[250px] overflow-auto">
-                            {files.map((file, idx) => {
-                              const Icon = getFileIcon(file.name);
-                              return (
-                                <div key={file.id || idx} className="flex items-center gap-3 bg-white p-2.5 rounded-lg border hover:shadow-sm transition-shadow group">
-                                  <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center flex-shrink-0">
-                                    <Icon className="w-4 h-4 text-blue-500" />
+                          {prog.learningOutcomes?.filter(o => o).length > 0 && (
+                            <div className="mb-4">
+                              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Learning Outcomes</h4>
+                              <div className="space-y-2">
+                                {prog.learningOutcomes.filter(o => o).map((outcome, i) => (
+                                  <div key={i} className="flex items-start gap-2.5">
+                                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-bold mt-0.5">{i + 1}</span>
+                                    <p className="text-sm text-gray-600">{outcome}</p>
                                   </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Metadata grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t">
+                            <div><p className="text-xs text-gray-400">Trainer</p><p className="text-sm font-medium text-gray-900 truncate">{getTrainerName(prog.trainerId)}</p></div>
+                            {prog.coTrainerId && <div><p className="text-xs text-gray-400">Co-trainer</p><p className="text-sm font-medium text-gray-900 truncate">{getTrainerName(prog.coTrainerId)}</p></div>}
+                            {prog.startDate && <div><p className="text-xs text-gray-400">Duration</p><p className="text-sm font-medium text-gray-900">{prog.startDate} → {prog.endDate}</p></div>}
+                            <div><p className="text-xs text-gray-400">Description</p><p className="text-sm text-gray-600 truncate">{prog.description || '-'}</p></div>
+                          </div>
+                        </div>
+
+                        {/* Right: Files + Links */}
+                        <div className="p-5 bg-gray-50/50">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Materials</h4>
+                            <button onClick={(e) => { e.stopPropagation(); setUploadingFor(prog.id); fileRef.current?.click(); }} className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
+                              <FileUp className="w-3 h-3" /> Add
+                            </button>
+                          </div>
+
+                          {files.length === 0 && urlCount === 0 ? (
+                            <div className="border-2 border-dashed border-gray-200 rounded-lg p-5 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); setUploadingFor(prog.id); fileRef.current?.click(); }}>
+                              <FileUp className="w-6 h-6 text-gray-300 mx-auto mb-1" />
+                              <p className="text-xs text-gray-400">Upload files or add links</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5 max-h-[200px] overflow-auto">
+                              {files.map((file, idx) => {
+                                const Icon = getFileIcon(file.name);
+                                return (
+                                  <div key={file.id || idx} className="flex items-center gap-2.5 bg-white p-2 rounded-lg border hover:shadow-sm group">
+                                    <div className="w-7 h-7 rounded bg-blue-50 flex items-center justify-center flex-shrink-0"><Icon className="w-3.5 h-3.5 text-blue-500" /></div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-medium text-gray-900 truncate cursor-pointer hover:text-blue-600" onClick={(e) => { e.stopPropagation(); downloadFile(file); }}>{file.name}</p>
+                                      <p className="text-xs text-gray-400">{formatFileSize(file.size)}</p>
+                                    </div>
+                                    <button onClick={(e) => { e.stopPropagation(); handleRemoveFile(prog.id, file.id); }} className="p-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100"><X className="w-3 h-3 text-red-400" /></button>
+                                  </div>
+                                );
+                              })}
+                              {prog.urls?.map((u, i) => (
+                                <a key={`url-${i}`} href={u.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="flex items-center gap-2.5 bg-white p-2 rounded-lg border hover:shadow-sm hover:border-purple-200">
+                                  <div className="w-7 h-7 rounded bg-purple-50 flex items-center justify-center flex-shrink-0"><Link2 className="w-3.5 h-3.5 text-purple-500" /></div>
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 truncate cursor-pointer hover:text-blue-600" onClick={() => downloadFile(file)}>{file.name}</p>
-                                    <p className="text-xs text-gray-400">{formatFileSize(file.size)} · {new Date(file.uploadedAt || file.createdAt).toLocaleDateString()}</p>
+                                    <p className="text-xs font-medium text-purple-700 truncate">{u.label}</p>
+                                    <p className="text-xs text-gray-400 truncate">{u.url}</p>
                                   </div>
-                                  <button onClick={() => handleRemoveFile(prog.id, file.id)} className="p-1 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <X className="w-3.5 h-3.5 text-red-400" />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {/* URL Links */}
-                        {prog.urls?.length > 0 && (
-                          <div className="mt-3">
-                            <h4 className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Links</h4>
-                            <div className="space-y-1">
-                              {prog.urls.map((u, i) => (
-                                <a key={i} href={u.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs text-purple-600 hover:text-purple-800 hover:underline p-1.5 rounded hover:bg-purple-50">
-                                  <Link2 className="w-3.5 h-3.5 flex-shrink-0" />
-                                  <span className="truncate">{u.label}</span>
                                 </a>
                               ))}
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
