@@ -43,6 +43,8 @@ export default function Sessions() {
   const [localAttendance, setLocalAttendance] = useState({});
   const [toast, setToast] = useState('');
   const [assignModal, setAssignModal] = useState(false);
+  const [assignDeptFilter, setAssignDeptFilter] = useState('');
+  const [assignSearch, setAssignSearch] = useState('');
   const [batchModal, setBatchModal] = useState(false);
   const [batchForm, setBatchForm] = useState({ name: '', description: '' });
   const [selectedEmpIds, setSelectedEmpIds] = useState(new Set());
@@ -138,8 +140,7 @@ export default function Sessions() {
   // Get enrollees NOT yet assigned to this session (for the assign modal)
   const getUnassignedEmployees = (sess) => {
     const assigned = new Set(sessionAssignments.filter(a => a.sessionId === sess.id).map(a => a.empId));
-    const progEnrolments = enrolments.filter(e => e.programId === sess.programId);
-    return progEnrolments.map(e => employees.find(emp => emp.id === e.empId)).filter(emp => emp && !assigned.has(emp.id));
+    return employees.filter(emp => !assigned.has(emp.id));
   };
 
   const getSessionBatches = (sess) => {
@@ -458,37 +459,64 @@ ${getSessionEmployees(detailSession).map(emp => {
         </div>
 
       {/* Assign People Modal */}
-      <Modal open={assignModal} onClose={() => setAssignModal(false)} title="Assign Employees to This Session" wide>
+      <Modal open={assignModal} onClose={() => { setAssignModal(false); setAssignDeptFilter(''); setAssignSearch(''); }} title="Assign Employees to This Session" wide>
         {detailSession && (() => {
-          const unassigned = getUnassignedEmployees(detailSession);
+          const allUnassigned = getUnassignedEmployees(detailSession);
+          const deptCounts = {};
+          allUnassigned.forEach(e => { deptCounts[e.department] = (deptCounts[e.department] || 0) + 1; });
+          const availableDepts = Object.keys(deptCounts).sort();
+          const filtered = allUnassigned.filter(e => {
+            const matchDept = !assignDeptFilter || e.department === assignDeptFilter;
+            const matchSearch = !assignSearch || e.name.toLowerCase().includes(assignSearch.toLowerCase()) || e.id.toLowerCase().includes(assignSearch.toLowerCase());
+            return matchDept && matchSearch;
+          });
+
           return (
             <div className="space-y-4">
-              {unassigned.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">All enrolled employees are already assigned to this session.</p>
+              {/* Department filter chips */}
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => setAssignDeptFilter('')} className={`px-3 py-1.5 rounded-lg text-xs border font-medium ${!assignDeptFilter ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-400'}`}>
+                  All Departments ({allUnassigned.length})
+                </button>
+                {availableDepts.map(d => (
+                  <button key={d} onClick={() => setAssignDeptFilter(assignDeptFilter === d ? '' : d)} className={`px-3 py-1.5 rounded-lg text-xs border font-medium ${assignDeptFilter === d ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-400'}`}>
+                    {d} ({deptCounts[d]})
+                  </button>
+                ))}
+              </div>
+
+              {/* Search + Select controls */}
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input value={assignSearch} onChange={e => setAssignSearch(e.target.value)} placeholder="Search by name or ID..." className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+                <button onClick={() => setSelectedEmpIds(new Set(filtered.map(e => e.id)))} className="text-xs text-indigo-600 hover:underline whitespace-nowrap">Select Visible ({filtered.length})</button>
+                {selectedEmpIds.size > 0 && <button onClick={() => setSelectedEmpIds(new Set())} className="text-xs text-gray-400 hover:underline whitespace-nowrap">Clear</button>}
+              </div>
+
+              {filtered.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">{allUnassigned.length === 0 ? 'All employees are already assigned to this session.' : 'No employees match your filter.'}</p>
               ) : (
-                <>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-500">{unassigned.length} enrollees not yet assigned</p>
-                    <button onClick={() => setSelectedEmpIds(new Set(unassigned.map(e => e.id)))} className="text-xs text-blue-600 hover:underline">Select All</button>
-                  </div>
-                  <div className="max-h-[350px] overflow-auto divide-y border rounded-lg">
-                    {unassigned.map(emp => (
-                      <label key={emp.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer">
-                        <input type="checkbox" checked={selectedEmpIds.has(emp.id)} onChange={() => {
-                          setSelectedEmpIds(prev => { const n = new Set(prev); n.has(emp.id) ? n.delete(emp.id) : n.add(emp.id); return n; });
-                        }} className="rounded border-gray-300" />
-                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold">{emp.name.charAt(0)}</div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{emp.name}</p>
-                          <p className="text-xs text-gray-400">{emp.department} · {emp.id}</p>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </>
+                <div className="max-h-[320px] overflow-auto divide-y border rounded-lg">
+                  {filtered.map(emp => (
+                    <label key={emp.id} className={`flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer ${selectedEmpIds.has(emp.id) ? 'bg-indigo-50' : ''}`}>
+                      <input type="checkbox" checked={selectedEmpIds.has(emp.id)} onChange={() => {
+                        setSelectedEmpIds(prev => { const n = new Set(prev); n.has(emp.id) ? n.delete(emp.id) : n.add(emp.id); return n; });
+                      }} className="rounded border-gray-300" />
+                      <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold flex-shrink-0">{emp.name.charAt(0)}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{emp.name}</p>
+                        <p className="text-xs text-gray-400">{emp.id} · {emp.designation || 'No title'}</p>
+                      </div>
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full flex-shrink-0">{emp.department}</span>
+                    </label>
+                  ))}
+                </div>
               )}
+
               <div className="flex justify-end gap-3 pt-3 border-t">
-                <button onClick={() => setAssignModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button onClick={() => { setAssignModal(false); setAssignDeptFilter(''); setAssignSearch(''); }} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
                 <button onClick={handleAssignEmployees} disabled={selectedEmpIds.size === 0} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
                   Assign {selectedEmpIds.size > 0 ? `(${selectedEmpIds.size})` : ''}
                 </button>
