@@ -90,10 +90,16 @@ export default function Sessions() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    const cleaned = { ...form, trainerId: form.trainerId || null, coTrainerId: form.coTrainerId || null, programId: form.programId || null };
+    let result;
     if (editing) {
-      await updateSession(editing, form);
+      result = await updateSession(editing, cleaned);
     } else {
-      await addSession({ ...form, id: `S${Date.now()}` });
+      result = await addSession({ ...cleaned, id: `S${Date.now()}` });
+    }
+    if (result?.error) {
+      alert(`Failed to save session: ${result.error.message}`);
+      return;
     }
     setModalOpen(false);
   };

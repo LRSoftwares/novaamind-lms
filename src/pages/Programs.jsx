@@ -73,11 +73,18 @@ export default function Programs() {
     const cleaned = {
       ...form,
       learningOutcomes: form.learningOutcomes.filter(o => o.trim()),
+      trainerId: form.trainerId || null,
+      coTrainerId: form.coTrainerId || null,
     };
+    let result;
     if (editing) {
-      await updateProgram(editing, cleaned);
+      result = await updateProgram(editing, cleaned);
     } else {
-      await addProgram({ ...cleaned, id: `P${Date.now()}` });
+      result = await addProgram({ ...cleaned, id: `P${Date.now()}` });
+    }
+    if (result?.error) {
+      alert(`Failed to save program: ${result.error.message}`);
+      return;
     }
     setModalOpen(false);
   };

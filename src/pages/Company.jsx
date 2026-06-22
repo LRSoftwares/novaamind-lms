@@ -254,8 +254,11 @@ export default function Company() {
 
   const handleSaveEnrol = async (e) => {
     e.preventDefault();
-    if (editingEnrol) await updateEnrolment(editingEnrol, enrolForm);
-    else await addEnrolment({ ...enrolForm, id: `E${Date.now()}` });
+    const cleaned = { ...enrolForm, empId: enrolForm.empId || null, programId: enrolForm.programId || null };
+    let result;
+    if (editingEnrol) result = await updateEnrolment(editingEnrol, cleaned);
+    else result = await addEnrolment({ ...cleaned, id: `E${Date.now()}` });
+    if (result?.error) { alert(`Failed: ${result.error.message}`); return; }
     setEnrolModal(false);
   };
   const handleDeleteEnrol = async (id) => { if (confirm('Remove this enrolment?')) await deleteEnrolment(id); };
