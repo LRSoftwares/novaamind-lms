@@ -178,51 +178,128 @@ export default function Company() {
 
     const reader = new FileReader();
     reader.onload = async (evt) => {
-      let text = evt.target.result;
-      text = text.replace(/^﻿/, '');
+      let text = evt.target.result.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-      Papa.parse(text, {
-        header: true,
-        skipEmptyLines: true,
-        complete: async (results) => {
-          const cleanRow = (r) => {
-            const clean = {};
-            Object.entries(r).forEach(([k, v]) => {
-              clean[k.trim().replace(/^﻿/, '')] = typeof v === 'string' ? v.trim() : v;
+      // Parse WITHOUT headers first to inspect raw rows
+      const raw = Papa.parse(text, { header: false, skipEmptyLines: true });
+      const rows = raw.data;
+      if (!rows || rows.length < 2) { alert('CSV file is empty or has no data rows.'); return; }
+
+      // Auto-detect: find the header row by looking for known column names
+      const KNOWN_HEADERS = ['emp id', 'emp_id', 'empid', 'id', 'name', 'emp name', 'emp_name', 'employee name', 'department', 'designation', 'email', 'gender', 'location', 'sitelocation', 'site_location', 'site location', 'hire date', 'hire_date', 'costcenter'];
+      let headerRowIdx = -1;
+
+      for (let i = 0; i < Math.min(rows.length, 10); i++) {
+        const cellsLower = rows[i].map(c => (c || '').toString().trim().toLowerCase().replace(/^﻿/, ''));
+        const matchCount = cellsLower.filter(c => KNOWN_HEADERS.includes(c)).length;
+        if (matchCount >= 2) { headerRowIdx = i; break; }
+      }
+
+      // If no header row found, try to auto-detect columns by content patterns
+      if (headerRowIdx === -1) {
+        console.log('[LMS] No standard headers found, auto-detecting columns from data...');
+        const imported = [];
+        const deptNames = ['Marketing', 'Tech', 'Sales', 'Operations', 'HR', 'Finance', 'Admin', 'Engineering', 'Design', 'Legal', 'Business Development', 'Support', 'IT'];
+
+        for (let i = 0; i < rows.length; i++) {
+          const cells = rows[i].map(c => (c || '').toString().trim()).filter(c => c);
+          if (cells.length < 2) continue;
+
+          // Skip summary/title rows (contain words like "Department", "Employees", "Designations", "Locations")
+          const joined = cells.join(' ').toLowerCase();
+          if (joined.includes('employees') && joined.includes('designation')) continue;
+          if (joined.includes('department') && (joined.includes('locations') || joined.includes('designations'))) continue;
+          if (cells.every(c => c === '')) continue;
+
+          // Try to identify: look for NAT-style ID, name (text with spaces), department, designation
+          let empId = '', empName = '', department = '', designation = '', location = '', gender = '', email = '';
+
+          for (const cell of cells) {
+            const cl = cell.toLowerCase();
+            if (/^nat\d+$/i.test(cell) && !empId) { empId = cell; }
+            else if (cl.includes('@') && !email) { email = cell; }
+            else if ((cl === 'male' || cl === 'female') && !gender) { gender = cell; }
+            else if (deptNames.some(d => cl === d.toLowerCase()) && !department) { department = cell; }
+            else if (!empName && cell.length > 2 && /[a-zA-Z]/.test(cell) && !/^\d+$/.test(cell) && !cl.includes('office') && !cl.includes('chennai') && !cl.includes('bangalore') && !cl.includes('head office')) { empName = cell; }
+            else if (!designation && cell.length > 2 && /[a-zA-Z]/.test(cell) && empName && !cl.includes('corporate') && !cl.includes('head office')) { designation = cell; }
+            else if (!location && cell.length > 2 && /[a-zA-Z]/.test(cell) && (cl.includes('chennai') || cl.includes('bangalore') || cl.includes('office') || cl.includes('karnataka') || cl.includes('telangana'))) { location = cell; }
+          }
+
+          if (empName) {
+            imported.push({
+              id: empId || `NAT${String(Date.now()).slice(-5)}${Math.random().toString(36).slice(2, 4)}`,
+              companyId: selectedId,
+              name: empName,
+              department: department || 'General',
+              designation: designation || '',
+              siteLocation: location || '',
+              email: email || '',
+              gender: gender || 'Male',
+              hireDate: '',
+              status: 'Active',
             });
-            return clean;
-          };
-
-          const imported = results.data.map(cleanRow).filter(r => {
-            const id = r['Emp ID'] || r['Emp_ID'] || r['EmpID'] || r['Emp Id'] || r['ID'];
-            const name = r['Name'] || r['Emp_Name'] || r['Emp Name'] || r['EmpName'] || r['Employee Name'];
-            return id || name;
-          }).map(r => ({
-            id: r['Emp ID'] || r['Emp_ID'] || r['EmpID'] || r['Emp Id'] || r['ID'] || `NAT${String(Date.now()).slice(-5)}${Math.random().toString(36).slice(2, 5)}`,
-            companyId: selectedId,
-            name: r['Name'] || r['Emp_Name'] || r['Emp Name'] || r['EmpName'] || r['Employee Name'] || '',
-            department: r['Department'] || 'Marketing',
-            designation: r['Designation'] || '',
-            siteLocation: r['Site_Location'] || r['Site Location'] || r['Sitelocation'] || r['Location'] || '',
-            email: r['Email'] || r['email'] || '',
-            gender: r['Gender'] || r['gender'] || 'Male',
-            hireDate: r['Hire_Date'] || r['Hire Date'] || r['HireDate'] || '',
-            status: 'Active',
-          }));
-
-          if (imported.length === 0) {
-            alert(`No employees found in CSV. Check that your file has headers like: Emp ID, Emp Name, Department, Designation.\n\nDetected headers: ${results.meta.fields?.join(', ')}`);
-            return;
           }
+        }
 
-          const result = await bulkImportEmployees(imported);
-          if (result.error) {
-            alert(`Import failed: ${result.error.message}`);
-          } else {
-            alert(`Imported ${result.count} employees into ${selectedCompany?.name}`);
-          }
-        },
-      });
+        if (imported.length === 0) {
+          alert(`Could not parse any employees from this CSV.\n\nTip: Use the CSV Template button to download the correct format, or ensure your file has columns: Emp ID, Emp Name, Department, Designation`);
+          return;
+        }
+
+        const result = await bulkImportEmployees(imported);
+        if (result.error) alert(`Import failed: ${result.error.message}`);
+        else alert(`Auto-detected and imported ${result.count} employees into ${selectedCompany?.name}`);
+        reader.result;
+        e.target.value = '';
+        return;
+      }
+
+      // Standard path: header row found
+      const headers = rows[headerRowIdx].map(c => (c || '').toString().trim().replace(/^﻿/, ''));
+      const dataRows = rows.slice(headerRowIdx + 1);
+
+      const findCol = (...names) => {
+        for (const n of names) {
+          const idx = headers.findIndex(h => h.toLowerCase() === n.toLowerCase());
+          if (idx >= 0) return idx;
+        }
+        return -1;
+      };
+
+      const colId = findCol('Emp ID', 'Emp_ID', 'EmpID', 'ID', 'Emp Id');
+      const colName = findCol('Emp Name', 'Emp_Name', 'Name', 'Employee Name', 'EmpName');
+      const colDept = findCol('Department');
+      const colDesig = findCol('Designation');
+      const colEmail = findCol('Email');
+      const colGender = findCol('Gender');
+      const colLoc = findCol('Sitelocation', 'Site_Location', 'Site Location', 'Location');
+      const colHire = findCol('Hire Date', 'Hire_Date', 'HireDate');
+
+      const imported = dataRows.filter(row => {
+        const name = colName >= 0 ? (row[colName] || '').trim() : '';
+        const id = colId >= 0 ? (row[colId] || '').trim() : '';
+        return name || id;
+      }).map(row => ({
+        id: (colId >= 0 ? (row[colId] || '').trim() : '') || `NAT${String(Date.now()).slice(-5)}${Math.random().toString(36).slice(2, 4)}`,
+        companyId: selectedId,
+        name: colName >= 0 ? (row[colName] || '').trim() : '',
+        department: colDept >= 0 ? (row[colDept] || '').trim() : 'General',
+        designation: colDesig >= 0 ? (row[colDesig] || '').trim() : '',
+        siteLocation: colLoc >= 0 ? (row[colLoc] || '').trim() : '',
+        email: colEmail >= 0 ? (row[colEmail] || '').trim() : '',
+        gender: colGender >= 0 ? (row[colGender] || '').trim() : 'Male',
+        hireDate: colHire >= 0 ? (row[colHire] || '').trim() : '',
+        status: 'Active',
+      }));
+
+      if (imported.length === 0) {
+        alert(`Found headers but no valid data rows.\n\nHeaders detected at row ${headerRowIdx + 1}: ${headers.filter(h => h).join(', ')}`);
+        return;
+      }
+
+      const result = await bulkImportEmployees(imported);
+      if (result.error) alert(`Import failed: ${result.error.message}`);
+      else alert(`Imported ${result.count} employees into ${selectedCompany?.name}`);
     };
     reader.readAsText(file);
     e.target.value = '';
