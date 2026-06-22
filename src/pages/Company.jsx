@@ -1,12 +1,12 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Building2, Users, BarChart3, Save, Plus, Edit2, Trash2, Search, Upload, Download, Star, ClipboardCheck, Eye, X, CheckCircle, ArrowLeft, UserPlus, MapPin, Globe, Phone } from 'lucide-react';
+import { Building2, Users, BarChart3, Save, Plus, Edit2, Trash2, Search, Upload, Download, Star, ClipboardCheck, Eye, X, CheckCircle, ArrowLeft, UserPlus, MapPin, Globe, Phone, FolderPlus } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import Modal from '../components/Modal';
 import Papa from 'papaparse';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
-const DEPARTMENTS = ['Marketing', 'Tech', 'Sales', 'Operations', 'HR'];
-const DEPT_COLORS = { Marketing: '#3b82f6', Tech: '#8b5cf6', Sales: '#f59e0b', Operations: '#10b981', HR: '#ef4444' };
+const DEFAULT_DEPARTMENTS = ['Marketing', 'Tech', 'Sales', 'Operations', 'HR'];
+const DEPT_COLOR_LIST = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'];
 const ENROL_STATUSES = ['Not Started', 'In Progress', 'Completed', 'Overdue', 'Remedial'];
 
 const emptyCompanyForm = {
@@ -76,6 +76,42 @@ export default function Company() {
 
   // ===== INSIDE A COMPANY =====
 
+  const [customDepartments, setCustomDepartments] = useState(() => {
+    const saved = localStorage.getItem('lms_custom_depts');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [deptModal, setDeptModal] = useState(false);
+  const [newDeptName, setNewDeptName] = useState('');
+  const [selectedEmpIds, setSelectedEmpIds] = useState(new Set());
+
+  // Merged departments: defaults + custom + any from existing employee data
+  const departments = useMemo(() => {
+    const all = new Set([...DEFAULT_DEPARTMENTS, ...customDepartments]);
+    employees.forEach(e => { if (e.department) all.add(e.department); });
+    return Array.from(all).sort();
+  }, [customDepartments, employees]);
+
+  const getDeptColor = (dept) => {
+    const idx = departments.indexOf(dept);
+    return DEPT_COLOR_LIST[idx % DEPT_COLOR_LIST.length];
+  };
+
+  const addDepartment = (name) => {
+    if (!name.trim() || departments.includes(name.trim())) return;
+    const updated = [...customDepartments, name.trim()];
+    setCustomDepartments(updated);
+    localStorage.setItem('lms_custom_depts', JSON.stringify(updated));
+  };
+
+  const removeDepartment = (name) => {
+    if (DEFAULT_DEPARTMENTS.includes(name)) return;
+    const empCount = employees.filter(e => e.department === name).length;
+    if (empCount > 0) { alert(`Cannot remove "${name}" -- ${empCount} employees are assigned to it.`); return; }
+    const updated = customDepartments.filter(d => d !== name);
+    setCustomDepartments(updated);
+    localStorage.setItem('lms_custom_depts', JSON.stringify(updated));
+  };
+
   const companyEmployees = useMemo(() =>
     employees.filter(e => e.companyId === selectedId),
     [employees, selectedId]);
@@ -131,7 +167,7 @@ export default function Company() {
     }), [companyEnrolments, employees, programs, enrolSearch, enrolFilterStatus]);
 
   const deptStats = useMemo(() =>
-    DEPARTMENTS.map(dept => {
+    departments.map(dept => {
       const deptEmps = companyEmployees.filter(e => e.department === dept);
       const deptEnr = companyEnrolments.filter(en => {
         const emp = employees.find(e => e.id === en.empId);
@@ -148,7 +184,7 @@ export default function Company() {
     }).filter(d => d.employees > 0), [companyEmployees, companyEnrolments, employees]);
 
   const pieData = useMemo(() =>
-    DEPARTMENTS.map(d => ({ name: d, value: deptCounts[d] || 0 })).filter(d => d.value > 0),
+    departments.map(d => ({ name: d, value: deptCounts[d] || 0 })).filter(d => d.value > 0),
     [deptCounts]);
 
   const getEmpEnrolments = (empId) => enrolments.filter(e => e.empId === empId);
@@ -558,12 +594,29 @@ export default function Company() {
       {/* ===== EMPLOYEES TAB ===== */}
       {tab === 'employees' && (
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex gap-2 flex-wrap">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex gap-2 flex-wrap items-center">
               <button onClick={() => setFilterDept('')} className={`px-3 py-1.5 rounded-lg text-sm border ${!filterDept ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'}`}>All ({companyEmployees.length})</button>
-              {DEPARTMENTS.filter(d => deptCounts[d]).map(d => (
+              {departments.filter(d => deptCounts[d]).map(d => (
                 <button key={d} onClick={() => setFilterDept(d)} className={`px-3 py-1.5 rounded-lg text-sm border ${filterDept === d ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'}`}>{d} ({deptCounts[d]})</button>
               ))}
+              <button onClick={() => setDeptModal(true)} className="flex items-center gap-1 px-2 py-1.5 text-xs text-indigo-600 hover:bg-indigo-50 rounded-lg border border-dashed border-indigo-300" title="Manage Departments">
+                <FolderPlus className="w-3.5 h-3.5" /> Depts
+              </button>
+              {selectedEmpIds.size > 0 && (
+                <button onClick={async () => {
+                  const count = selectedEmpIds.size;
+                  const names = filteredEmps.filter(e => selectedEmpIds.has(e.id)).map(e => e.name).slice(0, 5).join(', ');
+                  const more = count > 5 ? ` and ${count - 5} more` : '';
+                  if (confirm(`Are you sure you want to delete ${count} employee${count > 1 ? 's' : ''}?\n\n${names}${more}\n\nThis will also remove their enrolments, attendance records, and scores. This cannot be undone.`)) {
+                    for (const id of selectedEmpIds) { await deleteEmployee(id); }
+                    setSelectedEmpIds(new Set());
+                    showToast(`Deleted ${count} employee${count > 1 ? 's' : ''}`);
+                  }
+                }} className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium">
+                  <Trash2 className="w-3.5 h-3.5" /> Delete Selected ({selectedEmpIds.size})
+                </button>
+              )}
             </div>
             <div className="flex gap-2">
               <input type="file" ref={fileRef} accept=".csv" onChange={handleImport} className="hidden" />
@@ -583,6 +636,15 @@ export default function Company() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="text-left text-xs text-gray-500 uppercase border-b bg-gray-50">
+                  <th className="px-4 py-3 font-medium w-10">
+                    <input type="checkbox"
+                      checked={filteredEmps.length > 0 && selectedEmpIds.size === filteredEmps.length}
+                      onChange={() => {
+                        if (selectedEmpIds.size === filteredEmps.length) setSelectedEmpIds(new Set());
+                        else setSelectedEmpIds(new Set(filteredEmps.map(e => e.id)));
+                      }}
+                      className="rounded border-gray-300" />
+                  </th>
                   <th className="px-4 py-3 font-medium">Employee</th>
                   <th className="px-4 py-3 font-medium">Department</th>
                   <th className="px-4 py-3 font-medium">Designation</th>
@@ -593,12 +655,17 @@ export default function Company() {
                   const empEnr = getEmpEnrolments(emp.id);
                   const trainingAvg = empEnr.filter(e => e.avgScore > 0).length > 0 ? Math.round(empEnr.filter(e => e.avgScore > 0).reduce((s, e) => s + e.avgScore, 0) / empEnr.filter(e => e.avgScore > 0).length) : null;
                   return (
-                    <tr key={emp.id} className="border-b last:border-0 hover:bg-gray-50">
+                    <tr key={emp.id} className={`border-b last:border-0 hover:bg-gray-50 ${selectedEmpIds.has(emp.id) ? 'bg-blue-50' : ''}`}>
+                      <td className="px-4 py-3">
+                        <input type="checkbox" checked={selectedEmpIds.has(emp.id)} onChange={() => {
+                          setSelectedEmpIds(prev => { const n = new Set(prev); n.has(emp.id) ? n.delete(emp.id) : n.add(emp.id); return n; });
+                        }} className="rounded border-gray-300" />
+                      </td>
                       <td className="px-4 py-3"><div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold">{emp.name.charAt(0)}</div>
                         <div><p className="text-sm font-medium text-gray-900">{emp.name}</p><p className="text-xs text-gray-400">{emp.id}</p></div>
                       </div></td>
-                      <td className="px-4 py-3"><span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{emp.department}</span></td>
+                      <td className="px-4 py-3"><span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: getDeptColor(emp.department) + '20', color: getDeptColor(emp.department) }}>{emp.department}</span></td>
                       <td className="px-4 py-3 text-sm text-gray-600">{emp.designation}</td>
                       <td className="px-4 py-3">{trainingAvg !== null ? <span className={`text-sm font-medium ${trainingAvg >= 75 ? 'text-green-600' : 'text-amber-600'}`}>{trainingAvg}%</span> : <span className="text-xs text-gray-300">-</span>}</td>
                       <td className="px-4 py-3"><div className="flex gap-1">
@@ -708,7 +775,7 @@ export default function Company() {
               <h3 className="font-semibold text-gray-900 mb-4">Headcount</h3>
               <ResponsiveContainer width="100%" height={250}>
                 <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={3} dataKey="value" label={({ name, value }) => `${name} (${value})`}>
-                  {pieData.map(d => <Cell key={d.name} fill={DEPT_COLORS[d.name] || '#94a3b8'} />)}
+                  {pieData.map(d => <Cell key={d.name} fill={getDeptColor(d.name)} />)}
                 </Pie><Tooltip /></PieChart>
               </ResponsiveContainer>
             </div>
@@ -732,7 +799,7 @@ export default function Company() {
             </tr></thead>
             <tbody>{deptStats.map(d => (
               <tr key={d.name} className="border-b last:border-0 hover:bg-gray-50">
-                <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: DEPT_COLORS[d.name] }} /><span className="text-sm font-medium">{d.name}</span></div></td>
+                <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: getDeptColor(d.name) }} /><span className="text-sm font-medium">{d.name}</span></div></td>
                 <td className="px-4 py-3 text-sm">{d.employees}</td><td className="px-4 py-3 text-sm">{d.enrolled}</td>
                 <td className="px-4 py-3 text-sm text-green-600">{d.completed}</td>
                 <td className="px-4 py-3 text-sm">{d.avgScore > 0 ? `${d.avgScore}%` : '-'}</td>
@@ -759,7 +826,7 @@ export default function Company() {
           <input required value={empForm.name} onChange={e => setEmpForm({ ...empForm, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" /></div>
           <div className="grid grid-cols-2 gap-4">
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-            <select value={empForm.department} onChange={e => setEmpForm({ ...empForm, department: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none">{DEPARTMENTS.map(d => <option key={d}>{d}</option>)}</select></div>
+            <select value={empForm.department} onChange={e => setEmpForm({ ...empForm, department: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none">{departments.map(d => <option key={d}>{d}</option>)}</select></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Designation</label>
             <input value={empForm.designation} onChange={e => setEmpForm({ ...empForm, designation: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" /></div>
           </div>
@@ -815,6 +882,41 @@ export default function Company() {
         )}
       </Modal>
 
+      {/* Manage Departments Modal */}
+      <Modal open={deptModal} onClose={() => setDeptModal(false)} title="Manage Departments">
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <input value={newDeptName} onChange={e => setNewDeptName(e.target.value)} placeholder="New department name..." className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              onKeyDown={e => { if (e.key === 'Enter' && newDeptName.trim()) { addDepartment(newDeptName); setNewDeptName(''); } }} />
+            <button onClick={() => { if (newDeptName.trim()) { addDepartment(newDeptName); setNewDeptName(''); } }} className="flex items-center gap-1.5 bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800">
+              <Plus className="w-4 h-4" /> Add
+            </button>
+          </div>
+          <div className="space-y-1.5 max-h-[300px] overflow-auto">
+            {departments.map(d => {
+              const count = deptCounts[d] || 0;
+              const isDefault = DEFAULT_DEPARTMENTS.includes(d);
+              return (
+                <div key={d} className="flex items-center justify-between p-2.5 rounded-lg border hover:bg-gray-50">
+                  <div className="flex items-center gap-3">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getDeptColor(d) }} />
+                    <span className="text-sm font-medium text-gray-900">{d}</span>
+                    <span className="text-xs text-gray-400">{count} employee{count !== 1 ? 's' : ''}</span>
+                    {isDefault && <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Default</span>}
+                  </div>
+                  {!isDefault && (
+                    <button onClick={() => removeDepartment(d)} className="p-1 rounded hover:bg-red-50" title={count > 0 ? 'Cannot remove: has employees' : 'Remove department'}>
+                      <X className={`w-4 h-4 ${count > 0 ? 'text-gray-300' : 'text-red-400'}`} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-gray-400">Default departments can't be removed. Custom departments can only be removed when they have no employees.</p>
+        </div>
+      </Modal>
+
       <Modal open={enrolModal} onClose={() => setEnrolModal(false)} title={editingEnrol ? 'Edit Enrolment' : 'New Enrolment'}>
         <form onSubmit={handleSaveEnrol} className="space-y-4">
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
@@ -848,7 +950,7 @@ export default function Company() {
           </select></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
           <select required value={bulkEnrolForm.department} onChange={e => setBulkEnrolForm({ ...bulkEnrolForm, department: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none">
-            <option value="">Select</option>{DEPARTMENTS.filter(d => deptCounts[d]).map(d => <option key={d} value={d}>{d} ({deptCounts[d]} employees)</option>)}
+            <option value="">Select</option>{departments.filter(d => deptCounts[d]).map(d => <option key={d} value={d}>{d} ({deptCounts[d]} employees)</option>)}
           </select></div>
           <div><label className="block text-sm font-medium text-gray-700 mb-1">Enrol Date</label>
           <input type="date" value={bulkEnrolForm.enrolDate} onChange={e => setBulkEnrolForm({ ...bulkEnrolForm, enrolDate: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" /></div>
