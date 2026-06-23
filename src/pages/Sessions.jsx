@@ -1,8 +1,24 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import { Plus, Edit2, Trash2, Search, MapPin, Video, FileText, ChevronLeft, ChevronRight, Calendar, List, GraduationCap, ArrowLeft, StickyNote, ClipboardCheck, Download, Check, X, Clock, Users, Mail, FileDown, Camera, Link2, Image } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import Modal from '../components/Modal';
 import Papa from 'papaparse';
+
+function SessionImage({ photo }) {
+  const [src, setSrc] = useState(photo.storagePath || photo.url || '');
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const url = photo.storagePath || photo.url || '';
+    if (url.startsWith('http')) { setSrc(url); return; }
+    const { data } = supabase.storage.from('program-files').getPublicUrl(url);
+    if (data?.publicUrl) setSrc(data.publicUrl);
+  }, [photo]);
+
+  if (failed) return <div className="w-full h-full flex items-center justify-center bg-gray-100 text-xs text-gray-400 p-2 text-center"><Camera className="w-5 h-5 text-gray-300 mb-1" /><br/>{photo.name}</div>;
+  return <img src={src} alt={photo.name} className="w-full h-full object-cover" onError={() => setFailed(true)} />;
+}
 
 const SESSION_TYPES = ['In-Person', 'Online Sync', 'Online Async'];
 const SESSION_STATUSES = ['Scheduled', 'Completed', 'Cancelled'];
@@ -413,7 +429,7 @@ ${subs.map(s => {
                   <div className="grid grid-cols-3 gap-2">
                     {photos.map(photo => (
                       <div key={photo.id} className="relative group rounded-lg overflow-hidden border bg-gray-100 aspect-square">
-                        <img src={photo.storagePath || photo.url} alt={photo.name} className="w-full h-full object-cover" />
+                        <SessionImage photo={photo} />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <button onClick={() => removeSessionPhoto(photo.id)} className="p-1.5 bg-white rounded-full shadow"><X className="w-3.5 h-3.5 text-red-500" /></button>
                         </div>
