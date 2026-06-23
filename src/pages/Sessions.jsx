@@ -27,7 +27,7 @@ const emptyForm = {
 const attColor = { Present: 'bg-green-100 text-green-700', Absent: 'bg-red-100 text-red-700', Excused: 'bg-amber-100 text-amber-700', Late: 'bg-blue-100 text-blue-700' };
 
 export default function Sessions() {
-  const { sessions, programs, trainers, employees, enrolments, addSession, updateSession, deleteSession, sessionNotes, saveSessionNote, sessionAttendance, saveAttendance, bulkSaveAttendance, batches, addBatch, batchMembers, bulkAddBatchMembers, sessionAssignments, bulkAssignToSession, removeSessionAssignment, assignBatchToSession, sessionPhotos, addSessionPhoto, removeSessionPhoto, sessionSubmissions, addSessionSubmission, removeSessionSubmission } = useData();
+  const { sessions, programs, trainers, employees, enrolments, addSession, updateSession, deleteSession, sessionNotes, saveSessionNote, sessionAttendance, saveAttendance, bulkSaveAttendance, batches, addBatch, batchMembers, bulkAddBatchMembers, sessionAssignments, bulkAssignToSession, removeSessionAssignment, assignBatchToSession, sessionPhotos, addSessionPhoto, removeSessionPhoto, sessionSubmissions, addSessionSubmission, updateSessionSubmission, removeSessionSubmission } = useData();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterTrainer, setFilterTrainer] = useState('');
@@ -46,6 +46,7 @@ export default function Sessions() {
   const photoRef = useRef();
   const [subForm, setSubForm] = useState({ empId: '', title: '', url: '', notes: '' });
   const [subModal, setSubModal] = useState(false);
+  const [editingSub, setEditingSub] = useState(null);
   const [assignDeptFilter, setAssignDeptFilter] = useState('');
   const [assignSearch, setAssignSearch] = useState('');
   const [batchModal, setBatchModal] = useState(false);
@@ -374,7 +375,7 @@ ${getSessionEmployees(detailSession).map(emp => {
                   <div className="grid grid-cols-3 gap-2">
                     {photos.map(photo => (
                       <div key={photo.id} className="relative group rounded-lg overflow-hidden border bg-gray-100 aspect-square">
-                        <img src={photo.url || `https://hhcvozecelugmhbiznhf.supabase.co/storage/v1/object/public/program-files/${photo.storagePath}`} alt={photo.name} className="w-full h-full object-cover" />
+                        <img src={photo.storagePath || photo.url} alt={photo.name} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <button onClick={() => removeSessionPhoto(photo.id)} className="p-1.5 bg-white rounded-full shadow"><X className="w-3.5 h-3.5 text-red-500" /></button>
                         </div>
@@ -393,7 +394,7 @@ ${getSessionEmployees(detailSession).map(emp => {
             <div className="bg-white rounded-xl border p-5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Link2 className="w-4 h-4 text-indigo-500" /> Submissions</h3>
-                <button onClick={() => { setSubForm({ empId: '', title: '', url: '', notes: '' }); setSubModal(true); }} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
+                <button onClick={() => { setSubForm({ empId: '', title: '', url: '', notes: '' }); setEditingSub(null); setSubModal(true); }} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
                   <Plus className="w-3 h-3" /> Add Work
                 </button>
               </div>
@@ -416,7 +417,10 @@ ${getSessionEmployees(detailSession).map(emp => {
                             {sub.url && <a href={sub.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 hover:underline truncate block">{sub.url}</a>}
                             {sub.notes && <p className="text-xs text-gray-500 mt-0.5">{sub.notes}</p>}
                           </div>
-                          <button onClick={() => removeSessionSubmission(sub.id)} className="p-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100"><X className="w-3 h-3 text-red-400" /></button>
+                          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100">
+                            <button onClick={() => { setSubForm({ empId: sub.empId || '', title: sub.title, url: sub.url || '', notes: sub.notes || '' }); setEditingSub(sub.id); setSubModal(true); }} className="p-0.5 rounded hover:bg-gray-200"><Edit2 className="w-3 h-3 text-gray-500" /></button>
+                            <button onClick={() => removeSessionSubmission(sub.id)} className="p-0.5 rounded hover:bg-red-50"><X className="w-3 h-3 text-red-400" /></button>
+                          </div>
                         </div>
                       );
                     })}
@@ -607,14 +611,20 @@ ${getSessionEmployees(detailSession).map(emp => {
         })()}
       </Modal>
 
-      {/* Add Submission Modal */}
-      <Modal open={subModal} onClose={() => setSubModal(false)} title="Add Assignment / Work Submission">
+      {/* Add/Edit Submission Modal */}
+      <Modal open={subModal} onClose={() => { setSubModal(false); setEditingSub(null); }} title={editingSub ? 'Edit Submission' : 'Add Assignment / Work Submission'}>
         <form onSubmit={async (e) => {
           e.preventDefault();
           if (!detailSession) return;
-          await addSessionSubmission({ ...subForm, id: `SUB${Date.now()}`, sessionId: detailSession.id, empId: subForm.empId || null });
+          if (editingSub) {
+            await updateSessionSubmission(editingSub, { title: subForm.title, url: subForm.url, notes: subForm.notes, empId: subForm.empId || null });
+            showToast('Submission updated');
+          } else {
+            await addSessionSubmission({ ...subForm, id: `SUB${Date.now()}`, sessionId: detailSession.id, empId: subForm.empId || null });
+            showToast('Submission added');
+          }
           setSubModal(false);
-          showToast('Submission added');
+          setEditingSub(null);
         }} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Submitted By</label>
@@ -639,7 +649,7 @@ ${getSessionEmployees(detailSession).map(emp => {
           </div>
           <div className="flex justify-end gap-3 pt-3 border-t">
             <button type="button" onClick={() => setSubModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600">Cancel</button>
-            <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">Add Submission</button>
+            <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">{editingSub ? 'Save Changes' : 'Add Submission'}</button>
           </div>
         </form>
       </Modal>

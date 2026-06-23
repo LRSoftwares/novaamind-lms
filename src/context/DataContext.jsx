@@ -298,15 +298,18 @@ export function DataProvider({ children }) {
 
   // ---- Session Photos ----
   async function addSessionPhoto(sessionId, file) {
-    const filePath = `session-photos/${sessionId}/${Date.now()}_${file.name}`;
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `session-photos/${sessionId}/${Date.now()}_${safeName}`;
+    console.log('[LMS] uploading photo:', filePath);
     const { error: uploadErr } = await supabase.storage.from('program-files').upload(filePath, file);
-    if (uploadErr) return { error: uploadErr };
+    if (uploadErr) { console.error('[LMS] photo upload error:', uploadErr); return { error: uploadErr }; }
     const { data: urlData } = supabase.storage.from('program-files').getPublicUrl(filePath);
-    const row = { id: `SP${Date.now()}${Math.random().toString(36).slice(2,4)}`, session_id: sessionId, name: file.name, storage_path: filePath };
+    const photoUrl = urlData.publicUrl;
+    const row = { id: `SP${Date.now()}${Math.random().toString(36).slice(2,4)}`, session_id: sessionId, name: file.name, storage_path: photoUrl };
     const { data, error } = await supabase.from('session_photos').insert(row).select();
+    if (error) console.error('[LMS] photo DB insert error:', error);
     if (!error && data) {
       const photo = toCamel(data[0]);
-      photo.url = urlData.publicUrl;
       setSessionPhotos(prev => [...prev, photo]);
     }
     return { error };
@@ -323,6 +326,11 @@ export function DataProvider({ children }) {
   async function addSessionSubmission(sub) {
     const { data, error } = await supabase.from('session_submissions').insert(toSnake(sub)).select();
     if (!error && data) setSessionSubmissions(prev => [...prev, ...toCamel(data)]);
+    return { error };
+  }
+  async function updateSessionSubmission(id, updates) {
+    const { data, error } = await supabase.from('session_submissions').update(toSnake(updates)).eq('id', id).select();
+    if (!error && data) setSessionSubmissions(prev => prev.map(s => s.id === id ? toCamel(data[0]) : s));
     return { error };
   }
   async function removeSessionSubmission(id) {
@@ -411,7 +419,7 @@ export function DataProvider({ children }) {
     batchMembers, addBatchMember, bulkAddBatchMembers, removeBatchMember,
     sessionAssignments, assignEmployeeToSession, bulkAssignToSession, removeSessionAssignment, assignBatchToSession,
     sessionPhotos, addSessionPhoto, removeSessionPhoto,
-    sessionSubmissions, addSessionSubmission, removeSessionSubmission,
+    sessionSubmissions, addSessionSubmission, updateSessionSubmission, removeSessionSubmission,
     enrolments, addEnrolment, updateEnrolment, deleteEnrolment, bulkAddEnrolments,
     programFiles, addProgramFile, removeProgramFile,
     employeeScores, addEmployeeScore,
