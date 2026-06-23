@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Search, MapPin, Video, FileText, ChevronLeft, ChevronRight, Calendar, List, GraduationCap, ArrowLeft, StickyNote, ClipboardCheck, Download, Check, X, Clock, Users, Mail, FileDown } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { Plus, Edit2, Trash2, Search, MapPin, Video, FileText, ChevronLeft, ChevronRight, Calendar, List, GraduationCap, ArrowLeft, StickyNote, ClipboardCheck, Download, Check, X, Clock, Users, Mail, FileDown, Camera, Link2, Image } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import Modal from '../components/Modal';
 import Papa from 'papaparse';
@@ -27,7 +27,7 @@ const emptyForm = {
 const attColor = { Present: 'bg-green-100 text-green-700', Absent: 'bg-red-100 text-red-700', Excused: 'bg-amber-100 text-amber-700', Late: 'bg-blue-100 text-blue-700' };
 
 export default function Sessions() {
-  const { sessions, programs, trainers, employees, enrolments, addSession, updateSession, deleteSession, sessionNotes, saveSessionNote, sessionAttendance, saveAttendance, bulkSaveAttendance, batches, addBatch, batchMembers, bulkAddBatchMembers, sessionAssignments, bulkAssignToSession, removeSessionAssignment, assignBatchToSession } = useData();
+  const { sessions, programs, trainers, employees, enrolments, addSession, updateSession, deleteSession, sessionNotes, saveSessionNote, sessionAttendance, saveAttendance, bulkSaveAttendance, batches, addBatch, batchMembers, bulkAddBatchMembers, sessionAssignments, bulkAssignToSession, removeSessionAssignment, assignBatchToSession, sessionPhotos, addSessionPhoto, removeSessionPhoto, sessionSubmissions, addSessionSubmission, removeSessionSubmission } = useData();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterTrainer, setFilterTrainer] = useState('');
@@ -43,6 +43,9 @@ export default function Sessions() {
   const [localAttendance, setLocalAttendance] = useState({});
   const [toast, setToast] = useState('');
   const [assignModal, setAssignModal] = useState(false);
+  const photoRef = useRef();
+  const [subForm, setSubForm] = useState({ empId: '', title: '', url: '', notes: '' });
+  const [subModal, setSubModal] = useState(false);
   const [assignDeptFilter, setAssignDeptFilter] = useState('');
   const [assignSearch, setAssignSearch] = useState('');
   const [batchModal, setBatchModal] = useState(false);
@@ -344,6 +347,84 @@ ${getSessionEmployees(detailSession).map(emp => {
               </button>
             </div>
 
+            {/* Session Photos */}
+            <div className="bg-white rounded-xl border p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Camera className="w-4 h-4 text-pink-500" /> Session Pics</h3>
+                <div>
+                  <input type="file" ref={photoRef} multiple accept="image/*" onChange={async (e) => {
+                    const files = Array.from(e.target.files);
+                    for (const f of files) { await addSessionPhoto(sess.id, f); }
+                    e.target.value = '';
+                    showToast(`Uploaded ${files.length} photo${files.length > 1 ? 's' : ''}`);
+                  }} className="hidden" />
+                  <button onClick={() => photoRef.current?.click()} className="text-xs text-pink-600 hover:text-pink-800 font-medium flex items-center gap-1">
+                    <Plus className="w-3 h-3" /> Add Photos
+                  </button>
+                </div>
+              </div>
+              {(() => {
+                const photos = sessionPhotos.filter(p => p.sessionId === sess.id);
+                return photos.length === 0 ? (
+                  <div className="border-2 border-dashed border-gray-200 rounded-lg p-4 text-center cursor-pointer hover:border-pink-300 hover:bg-pink-50/30 transition-colors" onClick={() => photoRef.current?.click()}>
+                    <Image className="w-6 h-6 text-gray-300 mx-auto mb-1" />
+                    <p className="text-xs text-gray-400">Click to upload session photos</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {photos.map(photo => (
+                      <div key={photo.id} className="relative group rounded-lg overflow-hidden border bg-gray-100 aspect-square">
+                        <img src={photo.url || `https://hhcvozecelugmhbiznhf.supabase.co/storage/v1/object/public/program-files/${photo.storagePath}`} alt={photo.name} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <button onClick={() => removeSessionPhoto(photo.id)} className="p-1.5 bg-white rounded-full shadow"><X className="w-3.5 h-3.5 text-red-500" /></button>
+                        </div>
+                        <p className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1.5 py-0.5 truncate">{photo.name}</p>
+                      </div>
+                    ))}
+                    <div className="border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center cursor-pointer hover:border-pink-300 hover:bg-pink-50/30 aspect-square" onClick={() => photoRef.current?.click()}>
+                      <Plus className="w-5 h-5 text-gray-300" />
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Assignment Submissions */}
+            <div className="bg-white rounded-xl border p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Link2 className="w-4 h-4 text-indigo-500" /> Submissions</h3>
+                <button onClick={() => { setSubForm({ empId: '', title: '', url: '', notes: '' }); setSubModal(true); }} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
+                  <Plus className="w-3 h-3" /> Add Work
+                </button>
+              </div>
+              {(() => {
+                const subs = sessionSubmissions.filter(s => s.sessionId === sess.id);
+                return subs.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-3">No submissions yet. Add assignment links or work shared by attendees.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[200px] overflow-auto">
+                    {subs.map(sub => {
+                      const emp = employees.find(e => e.id === sub.empId);
+                      return (
+                        <div key={sub.id} className="flex items-start gap-3 p-2.5 bg-gray-50 rounded-lg border group">
+                          <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold flex-shrink-0 mt-0.5">{emp?.name?.charAt(0) || '?'}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-gray-900 truncate">{sub.title}</p>
+                              {emp && <span className="text-xs text-gray-400">{emp.name}</span>}
+                            </div>
+                            {sub.url && <a href={sub.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 hover:underline truncate block">{sub.url}</a>}
+                            {sub.notes && <p className="text-xs text-gray-500 mt-0.5">{sub.notes}</p>}
+                          </div>
+                          <button onClick={() => removeSessionSubmission(sub.id)} className="p-0.5 rounded hover:bg-red-50 opacity-0 group-hover:opacity-100"><X className="w-3 h-3 text-red-400" /></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
             <div className="bg-white rounded-xl border p-5">
               <h3 className="font-semibold text-gray-900 mb-2">Session Info</h3>
               <div className="space-y-2 text-sm">
@@ -524,6 +605,43 @@ ${getSessionEmployees(detailSession).map(emp => {
             </div>
           );
         })()}
+      </Modal>
+
+      {/* Add Submission Modal */}
+      <Modal open={subModal} onClose={() => setSubModal(false)} title="Add Assignment / Work Submission">
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          if (!detailSession) return;
+          await addSessionSubmission({ ...subForm, id: `SUB${Date.now()}`, sessionId: detailSession.id, empId: subForm.empId || null });
+          setSubModal(false);
+          showToast('Submission added');
+        }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Submitted By</label>
+            <select value={subForm.empId} onChange={e => setSubForm({ ...subForm, empId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Select employee (optional)</option>
+              {detailSession && getSessionEmployees(detailSession).map(emp => (
+                <option key={emp.id} value={emp.id}>{emp.name} ({emp.department})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+            <input required value={subForm.title} onChange={e => setSubForm({ ...subForm, title: e.target.value })} placeholder="e.g., Assignment 1, Presentation, Project Work" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Link / URL</label>
+            <input value={subForm.url} onChange={e => setSubForm({ ...subForm, url: e.target.value })} placeholder="https://drive.google.com/... or any link" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea value={subForm.notes} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} rows={2} placeholder="Optional comments about this submission..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex justify-end gap-3 pt-3 border-t">
+            <button type="button" onClick={() => setSubModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600">Cancel</button>
+            <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">Add Submission</button>
+          </div>
+        </form>
       </Modal>
 
       {/* Create Batch Modal */}

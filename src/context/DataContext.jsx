@@ -18,6 +18,8 @@ export function DataProvider({ children }) {
   const [batches, setBatches] = useState([]);
   const [batchMembers, setBatchMembers] = useState([]);
   const [sessionAssignments, setSessionAssignments] = useState([]);
+  const [sessionPhotos, setSessionPhotos] = useState([]);
+  const [sessionSubmissions, setSessionSubmissions] = useState([]);
   const [integrationSettings, setIntegrationSettings] = useState([]);
   const [notificationLogs, setNotificationLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,7 +28,7 @@ export function DataProvider({ children }) {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes] = await Promise.all([
+      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes] = await Promise.all([
         supabase.from('employees').select('*').order('name'),
         supabase.from('trainers').select('*').order('name'),
         supabase.from('programs').select('*').order('name'),
@@ -42,6 +44,8 @@ export function DataProvider({ children }) {
         supabase.from('batches').select('*'),
         supabase.from('batch_members').select('*'),
         supabase.from('session_assignments').select('*'),
+        supabase.from('session_photos').select('*'),
+        supabase.from('session_submissions').select('*'),
       ]);
 
       const allResults = [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes];
@@ -65,6 +69,8 @@ export function DataProvider({ children }) {
       setBatches(toCamel(baRes.data || []));
       setBatchMembers(toCamel(bmRes.data || []));
       setSessionAssignments(toCamel(sasgRes.data || []));
+      setSessionPhotos(toCamel(spRes.data || []));
+      setSessionSubmissions(toCamel(ssRes.data || []));
       setIntegrationSettings(toCamel(isRes.data || []));
       setNotificationLogs(toCamel(nlRes.data || []));
 
@@ -290,6 +296,41 @@ export function DataProvider({ children }) {
     return await bulkAssignToSession(sessionId, newEmpIds, batchId);
   }
 
+  // ---- Session Photos ----
+  async function addSessionPhoto(sessionId, file) {
+    const filePath = `session-photos/${sessionId}/${Date.now()}_${file.name}`;
+    const { error: uploadErr } = await supabase.storage.from('program-files').upload(filePath, file);
+    if (uploadErr) return { error: uploadErr };
+    const { data: urlData } = supabase.storage.from('program-files').getPublicUrl(filePath);
+    const row = { id: `SP${Date.now()}${Math.random().toString(36).slice(2,4)}`, session_id: sessionId, name: file.name, storage_path: filePath };
+    const { data, error } = await supabase.from('session_photos').insert(row).select();
+    if (!error && data) {
+      const photo = toCamel(data[0]);
+      photo.url = urlData.publicUrl;
+      setSessionPhotos(prev => [...prev, photo]);
+    }
+    return { error };
+  }
+  async function removeSessionPhoto(id) {
+    const photo = sessionPhotos.find(p => p.id === id);
+    if (photo?.storagePath) await supabase.storage.from('program-files').remove([photo.storagePath]);
+    const { error } = await supabase.from('session_photos').delete().eq('id', id);
+    if (!error) setSessionPhotos(prev => prev.filter(p => p.id !== id));
+    return { error };
+  }
+
+  // ---- Session Submissions ----
+  async function addSessionSubmission(sub) {
+    const { data, error } = await supabase.from('session_submissions').insert(toSnake(sub)).select();
+    if (!error && data) setSessionSubmissions(prev => [...prev, ...toCamel(data)]);
+    return { error };
+  }
+  async function removeSessionSubmission(id) {
+    const { error } = await supabase.from('session_submissions').delete().eq('id', id);
+    if (!error) setSessionSubmissions(prev => prev.filter(s => s.id !== id));
+    return { error };
+  }
+
   // ---- Enrolments ----
   async function addEnrolment(e) {
     const { data, error } = await supabase.from('enrolments').insert(toSnake(e)).select();
@@ -369,6 +410,8 @@ export function DataProvider({ children }) {
     batches, addBatch, updateBatch, deleteBatch,
     batchMembers, addBatchMember, bulkAddBatchMembers, removeBatchMember,
     sessionAssignments, assignEmployeeToSession, bulkAssignToSession, removeSessionAssignment, assignBatchToSession,
+    sessionPhotos, addSessionPhoto, removeSessionPhoto,
+    sessionSubmissions, addSessionSubmission, removeSessionSubmission,
     enrolments, addEnrolment, updateEnrolment, deleteEnrolment, bulkAddEnrolments,
     programFiles, addProgramFile, removeProgramFile,
     employeeScores, addEmployeeScore,
