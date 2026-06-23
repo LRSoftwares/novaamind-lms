@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Building2, Users, BarChart3, Save, Plus, Edit2, Trash2, Search, Upload, Download, Star, ClipboardCheck, Eye, X, CheckCircle, ArrowLeft, UserPlus, MapPin, Globe, Phone, FolderPlus } from 'lucide-react';
+import { Building2, Users, BarChart3, Save, Plus, Edit2, Trash2, Search, Upload, Download, Star, ClipboardCheck, Eye, X, CheckCircle, ArrowLeft, UserPlus, MapPin, Globe, Phone, FolderPlus, Target } from 'lucide-react';
+import CompanyKpis from './CompanyKpis';
 import { useData } from '../context/DataContext';
 import Modal from '../components/Modal';
 import Papa from 'papaparse';
@@ -547,6 +548,7 @@ export default function Company() {
   const TABS = [
     { key: 'employees', label: 'Employees', icon: Users },
     { key: 'enrolments', label: 'Enrolments', icon: UserPlus },
+    { key: 'kpis', label: 'KPIs', icon: Target },
     { key: 'departments', label: 'Dept Tracker', icon: BarChart3 },
     { key: 'details', label: 'Company Details', icon: Building2 },
   ];
@@ -811,6 +813,9 @@ export default function Company() {
       )}
 
       {/* ===== DETAILS TAB ===== */}
+      {/* ===== KPIs TAB ===== */}
+      {tab === 'kpis' && <CompanyKpis companyId={selectedId} />}
+
       {tab === 'details' && selectedCompany && (
         <div className="bg-white rounded-xl border p-6">
           <CompanyDetailsForm company={selectedCompany} onSave={async (data) => { await updateCompany(selectedId, data); setSaveToast(true); setTimeout(() => setSaveToast(false), 3000); }} />

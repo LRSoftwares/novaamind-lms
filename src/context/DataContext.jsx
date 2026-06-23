@@ -20,6 +20,10 @@ export function DataProvider({ children }) {
   const [sessionAssignments, setSessionAssignments] = useState([]);
   const [sessionPhotos, setSessionPhotos] = useState([]);
   const [sessionSubmissions, setSessionSubmissions] = useState([]);
+  const [kpiDefinitions, setKpiDefinitions] = useState([]);
+  const [kpiSubmissions, setKpiSubmissions] = useState([]);
+  const [kpiDataPoints, setKpiDataPoints] = useState([]);
+  const [kpiCertifications, setKpiCertifications] = useState([]);
   const [integrationSettings, setIntegrationSettings] = useState([]);
   const [notificationLogs, setNotificationLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +32,7 @@ export function DataProvider({ children }) {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes] = await Promise.all([
+      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes] = await Promise.all([
         supabase.from('employees').select('*').order('name'),
         supabase.from('trainers').select('*').order('name'),
         supabase.from('programs').select('*').order('name'),
@@ -46,6 +50,10 @@ export function DataProvider({ children }) {
         supabase.from('session_assignments').select('*'),
         supabase.from('session_photos').select('*'),
         supabase.from('session_submissions').select('*'),
+        supabase.from('kpi_definitions').select('*').order('sort_order'),
+        supabase.from('kpi_submissions').select('*').order('week_ending', { ascending: false }),
+        supabase.from('kpi_data_points').select('*'),
+        supabase.from('kpi_certifications').select('*'),
       ]);
 
       const allResults = [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes];
@@ -71,6 +79,10 @@ export function DataProvider({ children }) {
       setSessionAssignments(toCamel(sasgRes.data || []));
       setSessionPhotos(toCamel(spRes.data || []));
       setSessionSubmissions(toCamel(ssRes.data || []));
+      setKpiDefinitions(toCamel(kdRes.data || []));
+      setKpiSubmissions(toCamel(ksRes.data || []));
+      setKpiDataPoints(toCamel(kpRes.data || []));
+      setKpiCertifications(toCamel(kcRes.data || []));
       setIntegrationSettings(toCamel(isRes.data || []));
       setNotificationLogs(toCamel(nlRes.data || []));
 
@@ -391,6 +403,65 @@ export function DataProvider({ children }) {
     return { error };
   }
 
+  // ---- KPI Definitions ----
+  async function addKpiDefinition(def) {
+    const { data, error } = await supabase.from('kpi_definitions').insert(toSnake(def)).select();
+    if (!error && data) setKpiDefinitions(prev => [...prev, ...toCamel(data)]);
+    return { error };
+  }
+  async function bulkAddKpiDefinitions(list) {
+    const { data, error } = await supabase.from('kpi_definitions').insert(list.map(toSnake)).select();
+    if (!error && data) setKpiDefinitions(prev => [...prev, ...toCamel(data)]);
+    return { count: data?.length || 0, error };
+  }
+  async function updateKpiDefinition(id, updates) {
+    const { data, error } = await supabase.from('kpi_definitions').update(toSnake(updates)).eq('id', id).select();
+    if (!error && data) setKpiDefinitions(prev => prev.map(d => d.id === id ? toCamel(data[0]) : d));
+    return { error };
+  }
+  async function deleteKpiDefinition(id) {
+    const { error } = await supabase.from('kpi_definitions').delete().eq('id', id);
+    if (!error) setKpiDefinitions(prev => prev.filter(d => d.id !== id));
+    return { error };
+  }
+  async function lockBaselines(companyId, department) {
+    const defs = kpiDefinitions.filter(d => d.companyId === companyId && d.department === department);
+    const ids = defs.map(d => d.id);
+    const { error } = await supabase.from('kpi_definitions').update({ baseline_locked: true }).in('id', ids);
+    if (!error) setKpiDefinitions(prev => prev.map(d => ids.includes(d.id) ? { ...d, baselineLocked: true } : d));
+    return { error };
+  }
+
+  // ---- KPI Submissions ----
+  async function addKpiSubmission(sub) {
+    const { data, error } = await supabase.from('kpi_submissions').insert(toSnake(sub)).select();
+    if (!error && data) setKpiSubmissions(prev => [...prev, ...toCamel(data)]);
+    return { data: toCamel(data), error };
+  }
+  async function updateKpiSubmission(id, updates) {
+    const { data, error } = await supabase.from('kpi_submissions').update(toSnake(updates)).eq('id', id).select();
+    if (!error && data) setKpiSubmissions(prev => prev.map(s => s.id === id ? toCamel(data[0]) : s));
+    return { error };
+  }
+
+  // ---- KPI Data Points ----
+  async function bulkSaveKpiDataPoints(submissionId, points) {
+    await supabase.from('kpi_data_points').delete().eq('submission_id', submissionId);
+    setKpiDataPoints(prev => prev.filter(p => p.submissionId !== submissionId));
+    if (points.length === 0) return { count: 0, error: null };
+    const rows = points.map(p => ({ ...toSnake(p), submission_id: submissionId }));
+    const { data, error } = await supabase.from('kpi_data_points').insert(rows).select();
+    if (!error && data) setKpiDataPoints(prev => [...prev, ...toCamel(data)]);
+    return { count: data?.length || 0, error };
+  }
+
+  // ---- KPI Certifications ----
+  async function addKpiCertification(cert) {
+    const { data, error } = await supabase.from('kpi_certifications').insert(toSnake(cert)).select();
+    if (!error && data) setKpiCertifications(prev => [...prev, ...toCamel(data)]);
+    return { error };
+  }
+
   // ---- Integration Settings ----
   async function saveIntegrationSetting(id, config, enabled) {
     const { data, error } = await supabase.from('integration_settings')
@@ -420,6 +491,10 @@ export function DataProvider({ children }) {
     sessionAssignments, assignEmployeeToSession, bulkAssignToSession, removeSessionAssignment, assignBatchToSession,
     sessionPhotos, addSessionPhoto, removeSessionPhoto,
     sessionSubmissions, addSessionSubmission, updateSessionSubmission, removeSessionSubmission,
+    kpiDefinitions, addKpiDefinition, bulkAddKpiDefinitions, updateKpiDefinition, deleteKpiDefinition, lockBaselines,
+    kpiSubmissions, addKpiSubmission, updateKpiSubmission,
+    kpiDataPoints, bulkSaveKpiDataPoints,
+    kpiCertifications, addKpiCertification,
     enrolments, addEnrolment, updateEnrolment, deleteEnrolment, bulkAddEnrolments,
     programFiles, addProgramFile, removeProgramFile,
     employeeScores, addEmployeeScore,
