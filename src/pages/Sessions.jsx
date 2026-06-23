@@ -245,7 +245,26 @@ export default function Sessions() {
 
     doc += `\nSESSION NOTES\n${'-'.repeat(50)}\n`;
     doc += notes || '(No notes recorded)\n';
-    doc += `\n\n${'-'.repeat(50)}\nGenerated on ${new Date().toLocaleString()}\nNovaamind LMS`;
+
+    const photos = sessionPhotos.filter(p => p.sessionId === sess.id);
+    if (photos.length > 0) {
+      doc += `\nSESSION PHOTOS\n${'-'.repeat(50)}\n`;
+      doc += `${photos.length} photo(s) attached\n`;
+      photos.forEach((p, i) => { doc += `  ${i + 1}. ${p.name} — ${p.storagePath || p.url || 'uploaded'}\n`; });
+    }
+
+    const subs = sessionSubmissions.filter(s => s.sessionId === sess.id);
+    if (subs.length > 0) {
+      doc += `\nASSIGNMENT SUBMISSIONS\n${'-'.repeat(50)}\n`;
+      subs.forEach((s, i) => {
+        const emp = employees.find(e => e.id === s.empId);
+        doc += `  ${i + 1}. ${s.title}${emp ? ` — by ${emp.name}` : ''}\n`;
+        if (s.url) doc += `     Link: ${s.url}\n`;
+        if (s.notes) doc += `     Notes: ${s.notes}\n`;
+      });
+    }
+
+    doc += `\n${'-'.repeat(50)}\nGenerated on ${new Date().toLocaleString()}\nNovaamind LMS`;
 
     return doc;
   };
@@ -277,6 +296,25 @@ ${getSessionEmployees(detailSession).map(emp => {
 </table>
 <h2>Session Notes</h2>
 <pre>${(notes || '(No notes recorded)').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+${(() => {
+  const photos = sessionPhotos.filter(p => p.sessionId === detailSession.id);
+  if (photos.length === 0) return '';
+  return `<h2>Session Photos (${photos.length})</h2>
+<div style="display:flex;flex-wrap:wrap;gap:10px">
+${photos.map(p => `<div style="text-align:center"><img src="${p.storagePath || p.url}" alt="${p.name}" style="width:200px;height:150px;object-fit:cover;border:1px solid #e2e8f0;border-radius:6px" /><br/><span style="font-size:8pt;color:#64748b">${p.name}</span></div>`).join('')}
+</div>`;
+})()}
+${(() => {
+  const subs = sessionSubmissions.filter(s => s.sessionId === detailSession.id);
+  if (subs.length === 0) return '';
+  return `<h2>Assignment Submissions (${subs.length})</h2>
+<table><tr><th>Title</th><th>Submitted By</th><th>Link</th><th>Notes</th></tr>
+${subs.map(s => {
+  const emp = employees.find(e => e.id === s.empId);
+  return `<tr><td>${s.title || ''}</td><td>${emp?.name || '-'}</td><td>${s.url ? `<a href="${s.url}">${s.url}</a>` : '-'}</td><td>${s.notes || '-'}</td></tr>`;
+}).join('')}
+</table>`;
+})()}
 <p style="color:#94a3b8;font-size:9pt;margin-top:20px">Generated on ${new Date().toLocaleString()} — Novaamind LMS</p>
 </body></html>`;
 
