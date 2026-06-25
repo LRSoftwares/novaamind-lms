@@ -83,7 +83,8 @@ export default function Assessments() {
       for (const q of questions) {
         if (q._new) {
           const { _new, ...rest } = q;
-          await addAssessmentQuestion({ ...rest, assessmentId: editing });
+          const { error: qErr } = await addAssessmentQuestion({ ...rest, assessmentId: editing });
+          if (qErr) console.error('[LMS] Failed to add question:', qErr);
         } else if (q._dirty) {
           const { _dirty, ...rest } = q;
           await updateAssessmentQuestion(q.id, rest);
@@ -102,14 +103,22 @@ export default function Assessments() {
         showToast(`Error: ${error.message || error}`);
         return;
       }
+      let qErrors = 0;
       for (let i = 0; i < questions.length; i++) {
         const { _new, _dirty, ...rest } = questions[i];
-        await addAssessmentQuestion({ ...rest, assessmentId: id, sortOrder: i });
+        const { error: qErr } = await addAssessmentQuestion({ ...rest, assessmentId: id, sortOrder: i });
+        if (qErr) qErrors++;
+      }
+      if (qErrors > 0) {
+        setSaving(false);
+        showToast(`Assessment created but ${qErrors} question(s) failed to save. Check console for details.`);
+        setModalOpen(false);
+        return;
       }
     }
     setSaving(false);
     setModalOpen(false);
-    showToast(editing ? 'Assessment updated' : 'Assessment created');
+    showToast(editing ? 'Assessment updated' : `Assessment created with ${questions.length} question(s)`);
   };
 
   const handlePublish = async (id) => {
