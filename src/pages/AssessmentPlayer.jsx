@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Clock, ChevronLeft, ChevronRight, Flag, Send, AlertTriangle, GraduationCap } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight, Flag, Send, AlertTriangle, GraduationCap, ShieldAlert, Eye } from 'lucide-react';
 import { fetchAssessmentBySlug, submitResponses } from '../lib/assessmentApi';
 
 function TestTimer({ durationMinutes, startedAt, onExpire }) {
@@ -31,6 +31,13 @@ function TestTimer({ durationMinutes, startedAt, onExpire }) {
   );
 }
 
+const VIOLATION_LABELS = {
+  tab_switch: 'Switched tab/window',
+  fullscreen_exit: 'Exited fullscreen',
+  copy_paste: 'Copy/paste attempt',
+};
+const MAX_VIOLATIONS = 3;
+
 export default function AssessmentPlayer() {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -49,6 +56,20 @@ export default function AssessmentPlayer() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [startedAt, setStartedAt] = useState(null);
   const submittedRef = useRef(false);
+
+  const [violations, setViolations] = useState([]);
+  const [showViolationWarning, setShowViolationWarning] = useState(false);
+  const [lastViolationType, setLastViolationType] = useState('');
+  const violationsRef = useRef([]);
+
+  const addViolation = useCallback((type) => {
+    if (submittedRef.current) return;
+    const v = { type, timestamp: new Date().toISOString() };
+    violationsRef.current = [...violationsRef.current, v];
+    setViolations(prev => [...prev, v]);
+    setLastViolationType(type);
+    setShowViolationWarning(true);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -91,11 +112,54 @@ export default function AssessmentPlayer() {
     })();
   }, [slug]);
 
-  const doSubmit = useCallback(async () => {
+  // Anti-cheat: fullscreen + tab switch detection
+  useEffect(() => {
+    if (loading || error || !assessment) return;
+
+    const enterFullscreen = () => {
+      const el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    };
+    enterFullscreen();
+
+    const onVisibilityChange = () => {
+      if (document.hidden) addViolation('tab_switch');
+    };
+
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        addViolation('fullscreen_exit');
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    };
+  }, [loading, error, assessment, addViolation]);
+
+  const handleCopyPaste = useCallback((e) => {
+    e.preventDefault();
+    addViolation('copy_paste');
+  }, [addViolation]);
+
+  const handleContextMenu = useCallback((e) => {
+    e.preventDefault();
+  }, []);
+
+  const doSubmit = useCallback(async (forceViolations) => {
     if (submittedRef.current) return;
     submittedRef.current = true;
     setSubmitting(true);
-    const result = await submitResponses(attemptId, assessmentId, answers);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    const result = await submitResponses(attemptId, assessmentId, answers, forceViolations || violationsRef.current);
     if (result.error) {
       submittedRef.current = false;
       setSubmitting(false);
@@ -107,6 +171,16 @@ export default function AssessmentPlayer() {
 
   const handleTimerExpire = useCallback(() => {
     doSubmit();
+  }, [doSubmit]);
+
+  const handleViolationContinue = useCallback(() => {
+    setShowViolationWarning(false);
+    if (violationsRef.current.length >= MAX_VIOLATIONS) {
+      doSubmit(violationsRef.current);
+      return;
+    }
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
   }, [doSubmit]);
 
   if (loading) {
@@ -134,7 +208,51 @@ export default function AssessmentPlayer() {
   const answeredCount = Object.keys(answers).filter(k => answers[k] !== null && answers[k] !== '' && answers[k] !== undefined).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div
+      className="min-h-screen bg-gray-50 flex select-none"
+      onCopy={handleCopyPaste}
+      onPaste={handleCopyPaste}
+      onCut={handleCopyPaste}
+      onContextMenu={handleContextMenu}
+    >
+      {/* Violation Warning Modal */}
+      {showViolationWarning && (
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
+            <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-3" />
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Suspicious Activity Detected</h3>
+            <p className="text-sm text-gray-600 mb-1">
+              <span className="font-medium text-red-600">{VIOLATION_LABELS[lastViolationType] || lastViolationType}</span>
+            </p>
+            <p className="text-sm text-gray-500 mb-4">
+              This is violation <span className="font-bold text-red-600">{violations.length}</span> of {MAX_VIOLATIONS}.
+              {violations.length >= MAX_VIOLATIONS
+                ? ' Your test will be auto-submitted now.'
+                : ' The test will be auto-submitted after 3 violations.'}
+            </p>
+            <div className="bg-red-50 rounded-lg p-3 mb-4">
+              <div className="flex items-center justify-center gap-1">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                    i <= violations.length ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-400'
+                  }`}>{i}</div>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={handleViolationContinue}
+              className={`w-full py-2.5 rounded-xl text-sm font-medium ${
+                violations.length >= MAX_VIOLATIONS
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              {violations.length >= MAX_VIOLATIONS ? 'Submit Test' : 'Continue Test'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Submit Confirmation Modal */}
       {showConfirm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -199,6 +317,15 @@ export default function AssessmentPlayer() {
             <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-gray-100" /> Unanswered</div>
           </div>
         </div>
+
+        {violations.length > 0 && (
+          <div className="p-3 border-t border-gray-100">
+            <div className="flex items-center gap-1.5 text-xs text-red-600">
+              <Eye className="w-3.5 h-3.5" />
+              <span>{violations.length} violation{violations.length !== 1 ? 's' : ''} recorded</span>
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* Main Content */}
@@ -207,6 +334,11 @@ export default function AssessmentPlayer() {
         <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
           <h1 className="font-semibold text-gray-900 truncate">{assessment.title}</h1>
           <div className="flex items-center gap-4">
+            {violations.length > 0 && (
+              <span className="flex items-center gap-1 text-xs text-red-500 bg-red-50 px-2 py-1 rounded-full">
+                <ShieldAlert className="w-3.5 h-3.5" /> {violations.length}/{MAX_VIOLATIONS}
+              </span>
+            )}
             {startedAt && (
               <TestTimer durationMinutes={assessment.durationMinutes} startedAt={startedAt} onExpire={handleTimerExpire} />
             )}

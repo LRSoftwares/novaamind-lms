@@ -89,6 +89,17 @@ export default function AssessmentResult() {
               Some subjective answers are pending manual review
             </p>
           )}
+
+          {(() => {
+            let v = attempt.violations || [];
+            try { if (typeof v === 'string') v = JSON.parse(v); } catch { v = []; }
+            if (!Array.isArray(v) || v.length === 0) return null;
+            return (
+              <p className="text-xs text-red-600 mt-2 bg-red-50 inline-block px-3 py-1 rounded-full">
+                {v.length} integrity violation{v.length !== 1 ? 's' : ''} recorded during this assessment
+              </p>
+            );
+          })()}
         </div>
 
         {/* Question Review */}

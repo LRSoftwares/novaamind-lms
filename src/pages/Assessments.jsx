@@ -243,6 +243,30 @@ export default function Assessments() {
             </div>
           </div>
 
+          {(() => {
+            let v = att?.violations || [];
+            try { if (typeof v === 'string') v = JSON.parse(v); } catch { v = []; }
+            if (!Array.isArray(v) || v.length === 0) return null;
+            return (
+              <div className={`rounded-xl border p-4 mb-4 ${v.length >= 3 ? 'bg-red-50 border-red-200' : v.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`text-sm font-semibold ${v.length >= 3 ? 'text-red-700' : 'text-amber-700'}`}>
+                    {v.length} Integrity Violation{v.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {v.map((vi, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+                      <span className="w-4 text-center font-mono">{i + 1}.</span>
+                      <span className="font-medium">{vi.type === 'tab_switch' ? 'Tab switch' : vi.type === 'fullscreen_exit' ? 'Fullscreen exit' : vi.type === 'copy_paste' ? 'Copy/paste' : vi.type}</span>
+                      <span className="text-gray-400">{vi.timestamp ? new Date(vi.timestamp).toLocaleTimeString() : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="space-y-4">
             {qs.map((q, idx) => {
               const resp = responses.find(r => r.questionId === q.id);
@@ -345,6 +369,7 @@ export default function Assessments() {
                   <th className="px-4 py-3 font-medium text-gray-600">%</th>
                   <th className="px-4 py-3 font-medium text-gray-600">Status</th>
                   <th className="px-4 py-3 font-medium text-gray-600">Date</th>
+                  <th className="px-4 py-3 font-medium text-gray-600">Integrity</th>
                   <th className="px-4 py-3 font-medium text-gray-600"></th>
                 </tr>
               </thead>
@@ -367,6 +392,15 @@ export default function Assessments() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-500">{att.submittedAt ? new Date(att.submittedAt).toLocaleDateString() : '—'}</td>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          let v = att.violations || [];
+                          try { if (typeof v === 'string') v = JSON.parse(v); } catch { v = []; }
+                          const count = Array.isArray(v) ? v.length : 0;
+                          if (count === 0) return <span className="text-xs text-green-600">Clean</span>;
+                          return <span className={`text-xs font-medium ${count >= 3 ? 'text-red-600' : 'text-amber-600'}`}>{count} flag{count !== 1 ? 's' : ''}</span>;
+                        })()}
+                      </td>
                       <td className="px-4 py-3">
                         <Eye className="w-4 h-4 text-gray-400" />
                       </td>

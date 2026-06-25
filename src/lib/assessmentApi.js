@@ -149,7 +149,7 @@ export async function startAttempt(assessmentId, candidateId) {
   return { attempt: toCamel(data) };
 }
 
-export async function submitResponses(attemptId, assessmentId, answers) {
+export async function submitResponses(attemptId, assessmentId, answers, violations = []) {
   const fullQuestions = await fetchAssessmentQuestionsForScoring(assessmentId);
 
   const { data: assessment } = await supabase
@@ -197,6 +197,7 @@ export async function submitResponses(attemptId, assessmentId, answers) {
       max_possible: totals.maxPossible,
       percentage: totals.percentage,
       passed: totals.passed,
+      violations: violations.length > 0 ? JSON.stringify(violations) : '[]',
     })
     .eq('id', attemptId);
 
