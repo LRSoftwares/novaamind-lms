@@ -26,13 +26,19 @@ export function DataProvider({ children }) {
   const [kpiCertifications, setKpiCertifications] = useState([]);
   const [integrationSettings, setIntegrationSettings] = useState([]);
   const [notificationLogs, setNotificationLogs] = useState([]);
+  const [assessments, setAssessments] = useState([]);
+  const [assessmentQuestions, setAssessmentQuestions] = useState([]);
+  const [assessmentCandidates, setAssessmentCandidates] = useState([]);
+  const [assessmentAttempts, setAssessmentAttempts] = useState([]);
+  const [assessmentResponses, setAssessmentResponses] = useState([]);
+  const [assessmentLinks, setAssessmentLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState('connecting');
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes] = await Promise.all([
+      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes, asmRes, aqRes, acRes, aaRes, arRes, alRes] = await Promise.all([
         supabase.from('employees').select('*').order('name'),
         supabase.from('trainers').select('*').order('name'),
         supabase.from('programs').select('*').order('name'),
@@ -54,6 +60,12 @@ export function DataProvider({ children }) {
         supabase.from('kpi_submissions').select('*').order('week_ending', { ascending: false }),
         supabase.from('kpi_data_points').select('*'),
         supabase.from('kpi_certifications').select('*'),
+        supabase.from('assessments').select('*').order('created_at', { ascending: false }),
+        supabase.from('assessment_questions').select('*').order('sort_order'),
+        supabase.from('assessment_candidates').select('*').order('registered_at', { ascending: false }),
+        supabase.from('assessment_attempts').select('*').order('created_at', { ascending: false }),
+        supabase.from('assessment_responses').select('*'),
+        supabase.from('assessment_links').select('*'),
       ]);
 
       const allResults = [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes];
@@ -85,6 +97,12 @@ export function DataProvider({ children }) {
       setKpiCertifications(toCamel(kcRes.data || []));
       setIntegrationSettings(toCamel(isRes.data || []));
       setNotificationLogs(toCamel(nlRes.data || []));
+      setAssessments(toCamel(asmRes.data || []));
+      setAssessmentQuestions(toCamel(aqRes.data || []));
+      setAssessmentCandidates(toCamel(acRes.data || []));
+      setAssessmentAttempts(toCamel(aaRes.data || []));
+      setAssessmentResponses(toCamel(arRes.data || []));
+      setAssessmentLinks(toCamel(alRes.data || []));
 
       const filesMap = {};
       (pfRes.data || []).forEach(f => {
@@ -431,6 +449,13 @@ export function DataProvider({ children }) {
     if (!error) setKpiDefinitions(prev => prev.map(d => ids.includes(d.id) ? { ...d, baselineLocked: true } : d));
     return { error };
   }
+  async function unlockBaselines(companyId, department) {
+    const defs = kpiDefinitions.filter(d => d.companyId === companyId && d.department === department);
+    const ids = defs.map(d => d.id);
+    const { error } = await supabase.from('kpi_definitions').update({ baseline_locked: false }).in('id', ids);
+    if (!error) setKpiDefinitions(prev => prev.map(d => ids.includes(d.id) ? { ...d, baselineLocked: false } : d));
+    return { error };
+  }
 
   // ---- KPI Submissions ----
   async function addKpiSubmission(sub) {
@@ -477,6 +502,80 @@ export function DataProvider({ children }) {
     return { error };
   }
 
+  // ---- Assessments ----
+  async function addAssessment(a) {
+    const payload = toSnake(a);
+    if (!payload.program_id) payload.program_id = null;
+    console.log('[LMS] addAssessment payload:', payload);
+    const { data, error } = await supabase.from('assessments').insert(payload).select();
+    if (error) console.error('[LMS] addAssessment error:', error);
+    else console.log('[LMS] addAssessment success:', data);
+    if (!error && data) setAssessments(prev => [...toCamel(data), ...prev]);
+    return { data: toCamel(data), error };
+  }
+  async function updateAssessment(id, updates) {
+    const { data, error } = await supabase.from('assessments').update({ ...toSnake(updates), updated_at: new Date().toISOString() }).eq('id', id).select();
+    if (!error && data) setAssessments(prev => prev.map(a => a.id === id ? toCamel(data[0]) : a));
+    return { error };
+  }
+  async function deleteAssessment(id) {
+    const { error } = await supabase.from('assessments').delete().eq('id', id);
+    if (!error) {
+      setAssessments(prev => prev.filter(a => a.id !== id));
+      setAssessmentQuestions(prev => prev.filter(q => q.assessmentId !== id));
+      setAssessmentLinks(prev => prev.filter(l => l.assessmentId !== id));
+    }
+    return { error };
+  }
+  async function publishAssessment(id) {
+    const slug = Math.random().toString(36).slice(2, 10);
+    const linkId = `AL${Date.now()}`;
+    const { error: aErr } = await supabase.from('assessments').update({ status: 'Published', published_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
+    if (aErr) return { error: aErr };
+    const { data: linkData, error: lErr } = await supabase.from('assessment_links').insert({ id: linkId, assessment_id: id, slug, is_active: true }).select();
+    if (!lErr && linkData) setAssessmentLinks(prev => [...prev, ...toCamel(linkData)]);
+    setAssessments(prev => prev.map(a => a.id === id ? { ...a, status: 'Published', publishedAt: new Date().toISOString() } : a));
+    return { slug, error: lErr };
+  }
+
+  // ---- Assessment Questions ----
+  async function addAssessmentQuestion(q) {
+    const { data, error } = await supabase.from('assessment_questions').insert(toSnake(q)).select();
+    if (!error && data) setAssessmentQuestions(prev => [...prev, ...toCamel(data)]);
+    return { data: toCamel(data), error };
+  }
+  async function updateAssessmentQuestion(id, updates) {
+    const { data, error } = await supabase.from('assessment_questions').update(toSnake(updates)).eq('id', id).select();
+    if (!error && data) setAssessmentQuestions(prev => prev.map(q => q.id === id ? toCamel(data[0]) : q));
+    return { error };
+  }
+  async function deleteAssessmentQuestion(id) {
+    const { error } = await supabase.from('assessment_questions').delete().eq('id', id);
+    if (!error) setAssessmentQuestions(prev => prev.filter(q => q.id !== id));
+    return { error };
+  }
+
+  // ---- Assessment Links ----
+  async function deleteAssessmentLink(id) {
+    const { error } = await supabase.from('assessment_links').delete().eq('id', id);
+    if (!error) setAssessmentLinks(prev => prev.filter(l => l.id !== id));
+    return { error };
+  }
+
+  // ---- Assessment Attempts (admin grading) ----
+  async function updateAssessmentAttempt(id, updates) {
+    const { data, error } = await supabase.from('assessment_attempts').update(toSnake(updates)).eq('id', id).select();
+    if (!error && data) setAssessmentAttempts(prev => prev.map(a => a.id === id ? toCamel(data[0]) : a));
+    return { error };
+  }
+
+  // ---- Assessment Responses (admin grading) ----
+  async function updateAssessmentResponse(id, updates) {
+    const { data, error } = await supabase.from('assessment_responses').update(toSnake(updates)).eq('id', id).select();
+    if (!error && data) setAssessmentResponses(prev => prev.map(r => r.id === id ? toCamel(data[0]) : r));
+    return { error };
+  }
+
   const value = {
     loading, dbStatus, refresh: loadAll,
     companies, addCompany, updateCompany, deleteCompany,
@@ -491,7 +590,7 @@ export function DataProvider({ children }) {
     sessionAssignments, assignEmployeeToSession, bulkAssignToSession, removeSessionAssignment, assignBatchToSession,
     sessionPhotos, addSessionPhoto, removeSessionPhoto,
     sessionSubmissions, addSessionSubmission, updateSessionSubmission, removeSessionSubmission,
-    kpiDefinitions, addKpiDefinition, bulkAddKpiDefinitions, updateKpiDefinition, deleteKpiDefinition, lockBaselines,
+    kpiDefinitions, addKpiDefinition, bulkAddKpiDefinitions, updateKpiDefinition, deleteKpiDefinition, lockBaselines, unlockBaselines,
     kpiSubmissions, addKpiSubmission, updateKpiSubmission,
     kpiDataPoints, bulkSaveKpiDataPoints,
     kpiCertifications, addKpiCertification,
@@ -500,6 +599,11 @@ export function DataProvider({ children }) {
     employeeScores, addEmployeeScore,
     integrationSettings, saveIntegrationSetting,
     notificationLogs, addNotificationLog,
+    assessments, addAssessment, updateAssessment, deleteAssessment, publishAssessment,
+    assessmentQuestions, addAssessmentQuestion, updateAssessmentQuestion, deleteAssessmentQuestion,
+    assessmentCandidates, assessmentAttempts, updateAssessmentAttempt,
+    assessmentResponses, updateAssessmentResponse,
+    assessmentLinks, deleteAssessmentLink,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

@@ -10,7 +10,13 @@ import Company from './pages/Company';
 import Reports from './pages/Reports';
 import Trainers from './pages/Trainers';
 import Integrations from './pages/Integrations';
+import Assessments from './pages/Assessments';
 import Login from './pages/Login';
+import AssessmentLanding from './pages/AssessmentLanding';
+import AssessmentRegister from './pages/AssessmentRegister';
+import AssessmentVerifyOtp from './pages/AssessmentVerifyOtp';
+import AssessmentPlayer from './pages/AssessmentPlayer';
+import AssessmentResult from './pages/AssessmentResult';
 
 function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -27,6 +33,7 @@ function AdminLayout() {
               <Route path="/sessions" element={<Sessions />} />
               <Route path="/companies" element={<Company />} />
               <Route path="/trainers" element={<Trainers />} />
+              <Route path="/assessments" element={<Assessments />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/integrations" element={<Integrations />} />
             </Routes>
@@ -37,7 +44,7 @@ function AdminLayout() {
   );
 }
 
-function AppContent() {
+function AuthGate() {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -53,19 +60,28 @@ function AppContent() {
 
   if (!user) return <Login />;
 
+  return <AdminLayout />;
+}
+
+function AppRoutes() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/*" element={<AdminLayout />} />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route path="/assessment/:slug" element={<AssessmentLanding />} />
+      <Route path="/assessment/:slug/register" element={<AssessmentRegister />} />
+      <Route path="/assessment/:slug/verify" element={<AssessmentVerifyOtp />} />
+      <Route path="/assessment/:slug/test" element={<AssessmentPlayer />} />
+      <Route path="/assessment/:slug/result" element={<AssessmentResult />} />
+      <Route path="/*" element={<AuthGate />} />
+    </Routes>
   );
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
     </AuthProvider>
   );
 }

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BookOpen, CalendarDays, Building2, GraduationCap, BarChart3, LogOut, Menu, ChevronLeft, Plug } from 'lucide-react';
+import { LayoutDashboard, BookOpen, CalendarDays, Building2, GraduationCap, BarChart3, LogOut, Menu, ChevronLeft, Plug, ClipboardCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
@@ -8,6 +8,7 @@ const navItems = [
   { path: '/sessions', icon: CalendarDays, label: 'Sessions' },
   { path: '/companies', icon: Building2, label: 'Companies' },
   { path: '/trainers', icon: GraduationCap, label: 'Trainers' },
+  { path: '/assessments', icon: ClipboardCheck, label: 'Assessments' },
   { path: '/reports', icon: BarChart3, label: 'Reports' },
   { path: '/integrations', icon: Plug, label: 'Integrations' },
 ];
