@@ -543,7 +543,7 @@ export function DataProvider({ children }) {
     const payload = toSnake(q);
     console.log('[LMS] addAssessmentQuestion payload:', payload);
     const { data, error } = await supabase.from('assessment_questions').insert(payload).select();
-    if (error) console.error('[LMS] addAssessmentQuestion error:', error);
+    if (error) console.error('[LMS] addAssessmentQuestion error:', error.message, error.code, error.details, JSON.stringify(error));
     else console.log('[LMS] addAssessmentQuestion success:', data);
     if (!error && data) setAssessmentQuestions(prev => [...prev, ...toCamel(data)]);
     return { data: toCamel(data), error };
