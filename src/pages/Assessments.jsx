@@ -108,11 +108,11 @@ export default function Assessments() {
       await updateAssessment(editing, form);
       for (const q of finalQuestions) {
         if (q._new) {
-          const { _new, ...rest } = q;
+          const { _new, _dirty, ...rest } = q;
           const { error: qErr } = await addAssessmentQuestion({ ...rest, assessmentId: editing });
           if (qErr) console.error('[LMS] Failed to add question:', qErr);
         } else if (q._dirty) {
-          const { _dirty, ...rest } = q;
+          const { _new, _dirty, ...rest } = q;
           await updateAssessmentQuestion(q.id, rest);
         }
       }
