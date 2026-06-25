@@ -44,6 +44,7 @@ export default function AssessmentPlayer() {
   const [answers, setAnswers] = useState({});
   const [marked, setMarked] = useState(new Set());
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [startedAt, setStartedAt] = useState(null);
@@ -52,7 +53,16 @@ export default function AssessmentPlayer() {
   useEffect(() => {
     (async () => {
       const result = await fetchAssessmentBySlug(slug);
-      if (result.error) return;
+      if (result.error) {
+        setError(result.error);
+        setLoading(false);
+        return;
+      }
+      if (!result.questions || result.questions.length === 0) {
+        setError('This assessment has no questions yet.');
+        setLoading(false);
+        return;
+      }
       let qs = result.questions;
       if (result.assessment.shuffleQuestions) {
         qs = [...qs];
@@ -89,6 +99,7 @@ export default function AssessmentPlayer() {
     if (result.error) {
       submittedRef.current = false;
       setSubmitting(false);
+      alert('Failed to submit: ' + result.error);
       return;
     }
     navigate(`/assessment/${slug}/result?attemptId=${attemptId}`);
@@ -102,6 +113,19 @@ export default function AssessmentPlayer() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !assessment || questions.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center">
+          <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Cannot Load Assessment</h2>
+          <p className="text-gray-500 text-sm">{error || 'This assessment has no questions or is unavailable.'}</p>
+          <button onClick={() => navigate(`/assessment/${slug}`)} className="mt-4 text-blue-600 text-sm hover:underline">Go back</button>
+        </div>
       </div>
     );
   }

@@ -35,10 +35,10 @@ export default function AssessmentRegister() {
       return;
     }
 
-    setToast(`Your OTP is: ${result.otp} (mock — will be emailed in production)`);
+    setToast(`Your OTP is: ${result.otp}`);
     setTimeout(() => {
-      navigate(`/assessment/${slug}/verify?candidateId=${result.candidate.id}&assessmentId=${assessment.id}`);
-    }, 3000);
+      navigate(`/assessment/${slug}/verify?candidateId=${result.candidate.id}&assessmentId=${assessment.id}`, { state: { otp: result.otp } });
+    }, 5000);
   };
 
   if (loading) {

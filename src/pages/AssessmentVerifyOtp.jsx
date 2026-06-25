@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { GraduationCap, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { verifyOtp, startAttempt, registerCandidate } from '../lib/assessmentApi';
@@ -7,14 +7,16 @@ import { verifyOtp, startAttempt, registerCandidate } from '../lib/assessmentApi
 export default function AssessmentVerifyOtp() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const candidateId = searchParams.get('candidateId');
   const assessmentId = searchParams.get('assessmentId');
+  const passedOtp = location.state?.otp || '';
 
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(false);
-  const [toast, setToast] = useState('');
+  const [toast, setToast] = useState(passedOtp ? `Your OTP is: ${passedOtp}` : '');
 
   const handleVerify = async (e) => {
     e.preventDefault();
@@ -50,8 +52,7 @@ export default function AssessmentVerifyOtp() {
         company: candidate.company || '',
       });
       if (result.otp) {
-        setToast(`New OTP: ${result.otp} (mock)`);
-        setTimeout(() => setToast(''), 6000);
+        setToast(`Your OTP is: ${result.otp}`);
       }
     }
   };
@@ -59,8 +60,9 @@ export default function AssessmentVerifyOtp() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 p-4">
       {toast && (
-        <div className="fixed top-4 right-4 z-[100] bg-green-600 text-white px-5 py-3 rounded-lg shadow-lg text-sm max-w-sm animate-[slideIn_0.3s_ease]">
-          {toast}
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-green-600 text-white px-6 py-4 rounded-xl shadow-2xl text-center max-w-md animate-[slideIn_0.3s_ease]">
+          <p className="text-lg font-bold font-mono tracking-wider">{toast}</p>
+          <p className="text-xs text-green-200 mt-1">Copy this code and enter it below</p>
         </div>
       )}
 
@@ -72,7 +74,7 @@ export default function AssessmentVerifyOtp() {
 
         <ShieldCheck className="w-12 h-12 text-blue-500 mx-auto mb-4" />
         <h2 className="text-xl font-bold text-gray-900 mb-1">Verify OTP</h2>
-        <p className="text-sm text-gray-500 mb-6">Enter the 6-digit code sent to your email</p>
+        <p className="text-sm text-gray-500 mb-6">Enter the 6-digit code shown above</p>
 
         <form onSubmit={handleVerify}>
           <input
