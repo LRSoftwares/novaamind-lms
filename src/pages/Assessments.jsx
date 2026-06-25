@@ -77,10 +77,36 @@ export default function Assessments() {
 
   const handleSave = async () => {
     if (!form.title.trim()) return;
+
+    // Auto-save any question currently being edited
+    let finalQuestions = [...questions];
+    if (editingQ && qForm.questionText.trim()) {
+      const q = {
+        ...qForm,
+        id: editingQ.id,
+        sortOrder: editingQ._new ? finalQuestions.length : finalQuestions.findIndex(x => x.id === editingQ.id),
+        _new: editingQ._new || false,
+        _dirty: !editingQ._new,
+      };
+      if (editingQ._new) {
+        finalQuestions = [...finalQuestions, q];
+      } else {
+        finalQuestions = finalQuestions.map(x => x.id === editingQ.id ? q : x);
+      }
+      setQuestions(finalQuestions);
+      setEditingQ(null);
+    }
+
+    if (finalQuestions.length === 0) {
+      setTab('questions');
+      showToast('Please add at least one question before saving');
+      return;
+    }
+
     setSaving(true);
     if (editing) {
       await updateAssessment(editing, form);
-      for (const q of questions) {
+      for (const q of finalQuestions) {
         if (q._new) {
           const { _new, ...rest } = q;
           const { error: qErr } = await addAssessmentQuestion({ ...rest, assessmentId: editing });
@@ -90,7 +116,7 @@ export default function Assessments() {
           await updateAssessmentQuestion(q.id, rest);
         }
       }
-      const currentIds = new Set(questions.map(q => q.id));
+      const currentIds = new Set(finalQuestions.map(q => q.id));
       const existingQs = assessmentQuestions.filter(q => q.assessmentId === editing);
       for (const eq of existingQs) {
         if (!currentIds.has(eq.id)) await deleteAssessmentQuestion(eq.id);
@@ -104,8 +130,8 @@ export default function Assessments() {
         return;
       }
       let qErrors = 0;
-      for (let i = 0; i < questions.length; i++) {
-        const { _new, _dirty, ...rest } = questions[i];
+      for (let i = 0; i < finalQuestions.length; i++) {
+        const { _new, _dirty, ...rest } = finalQuestions[i];
         const { error: qErr } = await addAssessmentQuestion({ ...rest, assessmentId: id, sortOrder: i });
         if (qErr) qErrors++;
       }
@@ -118,7 +144,7 @@ export default function Assessments() {
     }
     setSaving(false);
     setModalOpen(false);
-    showToast(editing ? 'Assessment updated' : `Assessment created with ${questions.length} question(s)`);
+    showToast(editing ? 'Assessment updated' : `Assessment created with ${finalQuestions.length} question(s)`);
   };
 
   const handlePublish = async (id) => {
