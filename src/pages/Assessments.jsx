@@ -227,47 +227,79 @@ export default function Assessments() {
       return (
         <div>
           <button onClick={() => setSelectedAttempt(null)} className="text-sm text-blue-600 hover:underline mb-4">← Back to attempts</button>
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-xl font-bold text-gray-900">{candidate?.name || 'Unknown'}</h2>
               <p className="text-sm text-gray-500">{candidate?.email}</p>
+              {candidate?.phone && <p className="text-sm text-gray-400">{candidate.phone}</p>}
+              {candidate?.company && <p className="text-sm text-gray-400">{candidate.company}</p>}
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-lg font-bold">{att?.totalScore ?? att?.autoScore ?? 0}/{att?.maxPossible ?? 0}</span>
-              <span className="text-sm text-gray-500">({att?.percentage ?? 0}%)</span>
-              {att?.passed != null && (
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${att.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {att.passed ? 'Passed' : 'Failed'}
-                </span>
+              {att?.status === 'InProgress' ? (
+                <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">In Progress</span>
+              ) : (
+                <>
+                  <span className="text-lg font-bold">{att?.totalScore ?? att?.autoScore ?? 0}/{att?.maxPossible ?? 0}</span>
+                  <span className="text-sm text-gray-500">({att?.percentage ?? 0}%)</span>
+                  {att?.passed != null && (
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${att.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {att.passed ? 'Passed' : 'Failed'}
+                    </span>
+                  )}
+                </>
               )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="bg-white rounded-xl border border-gray-100 p-3">
+              <p className="text-xs text-gray-500">Started</p>
+              <p className="text-sm font-medium">{att?.startedAt ? new Date(att.startedAt).toLocaleString() : '—'}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-3">
+              <p className="text-xs text-gray-500">Submitted</p>
+              <p className="text-sm font-medium">{att?.submittedAt ? new Date(att.submittedAt).toLocaleString() : '—'}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-3">
+              <p className="text-xs text-gray-500">Attempt</p>
+              <p className="text-sm font-medium">#{att?.attemptNumber || 1}</p>
             </div>
           </div>
 
           {(() => {
             let v = att?.violations || [];
             try { if (typeof v === 'string') v = JSON.parse(v); } catch { v = []; }
-            if (!Array.isArray(v) || v.length === 0) return null;
+            if (!Array.isArray(v)) v = [];
+            const count = v.length;
             return (
-              <div className={`rounded-xl border p-4 mb-4 ${v.length >= 3 ? 'bg-red-50 border-red-200' : v.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={`text-sm font-semibold ${v.length >= 3 ? 'text-red-700' : 'text-amber-700'}`}>
-                    {v.length} Integrity Violation{v.length !== 1 ? 's' : ''}
+              <div className={`rounded-xl border p-4 mb-4 ${count >= 3 ? 'bg-red-50 border-red-200' : count > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-sm font-semibold ${count >= 3 ? 'text-red-700' : count > 0 ? 'text-amber-700' : 'text-green-700'}`}>
+                    {count === 0 ? 'No Integrity Violations' : `${count} Integrity Violation${count !== 1 ? 's' : ''}`}
                   </span>
                 </div>
-                <div className="space-y-1">
-                  {v.map((vi, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
-                      <span className="w-4 text-center font-mono">{i + 1}.</span>
-                      <span className="font-medium">{vi.type === 'tab_switch' ? 'Tab switch' : vi.type === 'fullscreen_exit' ? 'Fullscreen exit' : vi.type === 'copy_paste' ? 'Copy/paste' : vi.type}</span>
-                      <span className="text-gray-400">{vi.timestamp ? new Date(vi.timestamp).toLocaleTimeString() : ''}</span>
-                    </div>
-                  ))}
-                </div>
+                {count > 0 && (
+                  <div className="space-y-1 mt-2">
+                    {v.map((vi, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+                        <span className="w-4 text-center font-mono">{i + 1}.</span>
+                        <span className="font-medium">{vi.type === 'tab_switch' ? 'Tab switch' : vi.type === 'fullscreen_exit' ? 'Fullscreen exit' : vi.type === 'copy_paste' ? 'Copy/paste' : vi.type}</span>
+                        <span className="text-gray-400">{vi.timestamp ? new Date(vi.timestamp).toLocaleTimeString() : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })()}
 
-          <div className="space-y-4">
+          {att?.status === 'InProgress' && (
+            <div className="text-center py-8 text-gray-400">
+              <p className="text-sm">This candidate has not submitted yet</p>
+            </div>
+          )}
+
+          {att?.status !== 'InProgress' && <div className="space-y-4">
             {qs.map((q, idx) => {
               const resp = responses.find(r => r.questionId === q.id);
               let answer = resp?.answer;
@@ -338,7 +370,7 @@ export default function Assessments() {
                 </div>
               );
             })}
-          </div>
+          </div>}
         </div>
       );
     }
