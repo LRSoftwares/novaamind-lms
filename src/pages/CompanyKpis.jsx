@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Target, TrendingUp, Heart, Zap, Plus, Lock, Settings, X, Check, ArrowLeft, Loader2 } from 'lucide-react';
+import { Target, TrendingUp, Heart, Zap, Plus, Lock, Unlock, Settings, X, Check, ArrowLeft, Loader2, Trash2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { KPI_TEMPLATES, PILLAR_INFO, calcProgress, getHealthColor, getHealthLabel } from '../data/kpiTemplates';
 import KpiProgressBar from '../components/KpiProgressBar';
@@ -9,7 +9,7 @@ const PILLAR_ICONS = { S: TrendingUp, E: Heart, O: Zap };
 
 export default function CompanyKpis({ companyId }) {
   const {
-    kpiDefinitions, bulkAddKpiDefinitions, updateKpiDefinition, deleteKpiDefinition, lockBaselines,
+    kpiDefinitions, bulkAddKpiDefinitions, updateKpiDefinition, deleteKpiDefinition, lockBaselines, unlockBaselines,
     kpiSubmissions, kpiDataPoints, employees,
   } = useData();
 
@@ -21,6 +21,8 @@ export default function CompanyKpis({ companyId }) {
   const [toast, setToast] = useState('');
   const [customModal, setCustomModal] = useState(false);
   const [customForm, setCustomForm] = useState({ metricName: '', pillar: 'S', unit: '', direction: 'higher_better' });
+  const [addDeptModal, setAddDeptModal] = useState(false);
+  const [newDeptName, setNewDeptName] = useState('');
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -33,6 +35,38 @@ export default function CompanyKpis({ companyId }) {
   }, [companyDefs]);
 
   const templateDepts = Object.keys(KPI_TEMPLATES);
+
+  const allDepts = useMemo(() => {
+    const set = new Set([...templateDepts, ...departments]);
+    return Array.from(set).sort();
+  }, [templateDepts, departments]);
+
+  const handleAddDept = () => {
+    const name = newDeptName.trim();
+    if (!name || allDepts.includes(name)) return;
+    setAddDeptModal(false);
+    setNewDeptName('');
+    initBaselineForDept(name);
+  };
+
+  const handleDeleteDept = async (dept) => {
+    const deptDefs = companyDefs.filter(d => d.department === dept);
+    if (deptDefs.some(d => d.baselineLocked)) {
+      showToast('Cannot delete — baselines are locked. Unlock first.');
+      return;
+    }
+    if (!confirm(`Delete department "${dept}" and all its ${deptDefs.length} KPI metric(s)?`)) return;
+    setSaving(true);
+    for (const def of deptDefs) {
+      await deleteKpiDefinition(def.id);
+    }
+    setSaving(false);
+    if (baselineDept === dept) {
+      setBaselineDept('');
+      setBaselineRows([]);
+    }
+    showToast(`Department "${dept}" removed`);
+  };
 
   // Get latest value for a definition
   const getLatestValue = (defId) => {
@@ -123,11 +157,18 @@ export default function CompanyKpis({ companyId }) {
   };
 
   const handleLockBaseline = async () => {
-    if (!confirm(`Lock baselines for ${baselineDept}? Baseline values cannot be edited after locking.`)) return;
     setSaving(true);
     await lockBaselines(companyId, baselineDept);
     setSaving(false);
     showToast(`Baselines locked for ${baselineDept}`);
+    initBaselineForDept(baselineDept);
+  };
+
+  const handleUnlockBaseline = async () => {
+    setSaving(true);
+    await unlockBaselines(companyId, baselineDept);
+    setSaving(false);
+    showToast(`Baselines unlocked for ${baselineDept}`);
     initBaselineForDept(baselineDept);
   };
 
@@ -319,20 +360,33 @@ export default function CompanyKpis({ companyId }) {
 
           {/* Department selector */}
           <div className="flex gap-2 flex-wrap mb-5">
-            {templateDepts.map(d => {
+            {allDepts.map(d => {
               const hasData = companyDefs.some(def => def.department === d);
               const locked = companyDefs.some(def => def.department === d && def.baselineLocked);
               return (
-                <button key={d} onClick={() => initBaselineForDept(d)}
-                  className={`px-3 py-2 rounded-lg text-sm border font-medium transition-colors ${
-                    baselineDept === d ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
-                  }`}>
-                  {d}
-                  {locked && <Lock className="w-3 h-3 inline ml-1 opacity-60" />}
-                  {hasData && !locked && <Check className="w-3 h-3 inline ml-1 text-green-500" />}
-                </button>
+                <div key={d} className="relative group">
+                  <button onClick={() => initBaselineForDept(d)}
+                    className={`px-3 py-2 rounded-lg text-sm border font-medium transition-colors ${
+                      baselineDept === d ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
+                    }`}>
+                    {d}
+                    {locked && <Lock className="w-3 h-3 inline ml-1 opacity-60" />}
+                    {hasData && !locked && <Check className="w-3 h-3 inline ml-1 text-green-500" />}
+                  </button>
+                  {hasData && !locked && (
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteDept(d); }}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                      title={`Remove ${d}`}>
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
               );
             })}
+            <button onClick={() => setAddDeptModal(true)}
+              className="px-3 py-2 rounded-lg text-sm border border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center gap-1">
+              <Plus className="w-3.5 h-3.5" /> Add Department
+            </button>
           </div>
 
           {baselineDept ? (
@@ -410,6 +464,11 @@ export default function CompanyKpis({ companyId }) {
               <div className="px-5 py-4 border-t flex items-center justify-between">
                 <p className="text-xs text-gray-400">{baselineRows.filter(r => r.locked).length > 0 ? 'Some metrics are locked and cannot be edited.' : 'Set baseline and target values, then save.'}</p>
                 <div className="flex gap-2">
+                  {baselineRows.some(r => r.locked) && (
+                    <button onClick={handleUnlockBaseline} disabled={saving} className="flex items-center gap-1.5 border border-red-300 text-red-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 disabled:opacity-50">
+                      <Unlock className="w-4 h-4" /> Release Lock
+                    </button>
+                  )}
                   {baselineRows.some(r => r.existing && !r.locked) && (
                     <button onClick={handleLockBaseline} disabled={saving} className="flex items-center gap-1.5 border border-amber-300 text-amber-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-50 disabled:opacity-50">
                       <Lock className="w-4 h-4" /> Lock Baselines
@@ -429,6 +488,26 @@ export default function CompanyKpis({ companyId }) {
           )}
         </div>
       )}
+
+      {/* Add Department Modal */}
+      <Modal open={addDeptModal} onClose={() => setAddDeptModal(false)} title="Add Department">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Department Name</label>
+            <input value={newDeptName} onChange={e => setNewDeptName(e.target.value)} placeholder="e.g., Finance, IT, Customer Support"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              onKeyDown={e => { if (e.key === 'Enter') handleAddDept(); }}
+              autoFocus />
+            {newDeptName.trim() && allDepts.includes(newDeptName.trim()) && (
+              <p className="text-xs text-red-500 mt-1">This department already exists</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-3 border-t">
+            <button onClick={() => { setAddDeptModal(false); setNewDeptName(''); }} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600">Cancel</button>
+            <button onClick={handleAddDept} disabled={!newDeptName.trim() || allDepts.includes(newDeptName.trim())} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Add Department</button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Custom Metric Modal */}
       <Modal open={customModal} onClose={() => setCustomModal(false)} title="Add Custom Metric">
