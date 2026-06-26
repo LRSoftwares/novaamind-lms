@@ -5,12 +5,13 @@ import Modal from '../components/Modal';
 
 const DEPARTMENTS = ['Marketing', 'Tech', 'Sales', 'Operations', 'HR'];
 const STATUSES = ['Active', 'Upcoming', 'Completed', 'Archived'];
+const PROGRAM_TYPES = ['Coaching', 'Consulting', 'Building Enterprise AI Systems'];
 
 const emptyForm = {
   name: '', shortCode: '', description: '', departmentTarget: [],
   sessionsRequired: 3, passScoreThreshold: 70, startDate: '', endDate: '',
   status: 'Active', trainerId: '', coTrainerId: '',
-  summary: '', learningOutcomes: [''],
+  summary: '', learningOutcomes: [''], programType: '',
 };
 
 const FILE_ICONS = {
@@ -40,6 +41,7 @@ function formatFileSize(bytes) {
 export default function Programs() {
   const { programs, trainers, enrolments, programFiles, addProgram, updateProgram, deleteProgram, addProgramFile, removeProgramFile } = useData();
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -54,10 +56,11 @@ export default function Programs() {
   const [saving, setSaving] = useState(false);
 
   const filtered = useMemo(() =>
-    programs.filter(p =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.shortCode?.toLowerCase().includes(search.toLowerCase())
-    ), [programs, search]);
+    programs.filter(p => {
+      if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.shortCode?.toLowerCase().includes(search.toLowerCase())) return false;
+      if (typeFilter !== 'All' && p.programType !== typeFilter) return false;
+      return true;
+    }), [programs, search, typeFilter]);
 
   const openNew = () => {
     setForm({ ...emptyForm, learningOutcomes: [''] });
@@ -203,11 +206,15 @@ export default function Programs() {
       </div>
 
       <div className="mb-4">
-        <div className="mb-4">
-          <div className="relative max-w-sm">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="relative max-w-sm flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search programs..." className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
           </div>
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="All">All Types</option>
+            {PROGRAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
         </div>
 
         <input type="file" ref={fileRef} multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,.mp4,.zip" onChange={handleFileUpload} className="hidden" />
@@ -230,6 +237,7 @@ export default function Programs() {
                       <p className="text-sm font-semibold text-gray-900">{prog.name}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-gray-400">{prog.shortCode}</span>
+                        {prog.programType && <span className="text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">{prog.programType}</span>}
                         {totalMaterials > 0 && <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{totalMaterials} material{totalMaterials > 1 ? 's' : ''}</span>}
                       </div>
                     </div>
@@ -359,6 +367,14 @@ export default function Programs() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Short Code</label>
               <input value={form.shortCode} onChange={e => setForm({ ...form, shortCode: e.target.value })} placeholder="e.g., CLAUDE-AI-01" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Program Type</label>
+            <select value={form.programType || ''} onChange={e => setForm({ ...form, programType: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+              <option value="">Select type...</option>
+              {PROGRAM_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
 
           <div>
