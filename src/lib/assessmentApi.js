@@ -186,20 +186,32 @@ export async function submitResponses(attemptId, assessmentId, answers, violatio
 
   const totals = calculateTotals(scored, fullQuestions, passPercentage);
 
-  const { error: attErr } = await supabase
+  const attemptUpdate = {
+    status: 'Submitted',
+    submitted_at: new Date().toISOString(),
+    auto_score: totals.autoScore,
+    manual_score: totals.manualScore,
+    total_score: totals.totalScore,
+    max_possible: totals.maxPossible,
+    percentage: totals.percentage,
+    passed: totals.passed,
+  };
+
+  if (violations.length > 0) {
+    attemptUpdate.violations = JSON.stringify(violations);
+  }
+
+  let { error: attErr } = await supabase
     .from('assessment_attempts')
-    .update({
-      status: 'Submitted',
-      submitted_at: new Date().toISOString(),
-      auto_score: totals.autoScore,
-      manual_score: totals.manualScore,
-      total_score: totals.totalScore,
-      max_possible: totals.maxPossible,
-      percentage: totals.percentage,
-      passed: totals.passed,
-      violations: violations.length > 0 ? JSON.stringify(violations) : '[]',
-    })
+    .update(attemptUpdate)
     .eq('id', attemptId);
+
+  // If violations column doesn't exist yet, retry without it
+  if (attErr && attErr.code === 'PGRST204' && attemptUpdate.violations) {
+    delete attemptUpdate.violations;
+    const retry = await supabase.from('assessment_attempts').update(attemptUpdate).eq('id', attemptId);
+    attErr = retry.error;
+  }
 
   if (attErr) return { error: attErr.message };
 
