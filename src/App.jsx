@@ -11,6 +11,7 @@ import Reports from './pages/Reports';
 import Trainers from './pages/Trainers';
 import Integrations from './pages/Integrations';
 import Assessments from './pages/Assessments';
+import ThoughtRepository from './pages/ThoughtRepository';
 import Login from './pages/Login';
 import AssessmentLanding from './pages/AssessmentLanding';
 import AssessmentRegister from './pages/AssessmentRegister';
@@ -34,6 +35,7 @@ function AdminLayout() {
               <Route path="/companies" element={<Company />} />
               <Route path="/trainers" element={<Trainers />} />
               <Route path="/assessments" element={<Assessments />} />
+              <Route path="/thought-repo/*" element={<ThoughtRepository />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/integrations" element={<Integrations />} />
             </Routes>

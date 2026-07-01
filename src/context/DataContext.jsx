@@ -32,13 +32,14 @@ export function DataProvider({ children }) {
   const [assessmentAttempts, setAssessmentAttempts] = useState([]);
   const [assessmentResponses, setAssessmentResponses] = useState([]);
   const [assessmentLinks, setAssessmentLinks] = useState([]);
+  const [thoughts, setThoughts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState('connecting');
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes, asmRes, aqRes, acRes, aaRes, arRes, alRes] = await Promise.all([
+      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes, asmRes, aqRes, acRes, aaRes, arRes, alRes, thRes] = await Promise.all([
         supabase.from('employees').select('*').order('name'),
         supabase.from('trainers').select('*').order('name'),
         supabase.from('programs').select('*').order('name'),
@@ -66,6 +67,7 @@ export function DataProvider({ children }) {
         supabase.from('assessment_attempts').select('*').order('created_at', { ascending: false }),
         supabase.from('assessment_responses').select('*'),
         supabase.from('assessment_links').select('*'),
+        supabase.from('thoughts').select('*').order('updated_at', { ascending: false }),
       ]);
 
       const allResults = [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes];
@@ -103,6 +105,7 @@ export function DataProvider({ children }) {
       setAssessmentAttempts(toCamel(aaRes.data || []));
       setAssessmentResponses(toCamel(arRes.data || []));
       setAssessmentLinks(toCamel(alRes.data || []));
+      setThoughts(toCamel(thRes.data || []));
 
       const filesMap = {};
       (pfRes.data || []).forEach(f => {
@@ -573,6 +576,27 @@ export function DataProvider({ children }) {
     return { error };
   }
 
+  // ---- Thoughts ----
+  async function addThought(t) {
+    const payload = toSnake(t);
+    const { data, error } = await supabase.from('thoughts').insert(payload).select();
+    if (error) console.error('[LMS] addThought error:', error);
+    if (!error && data) setThoughts(prev => [toCamel(data[0]), ...prev]);
+    return { error: error?.message };
+  }
+  async function updateThought(id, updates) {
+    const payload = toSnake({ ...updates, updatedAt: new Date().toISOString() });
+    const { data, error } = await supabase.from('thoughts').update(payload).eq('id', id).select();
+    if (error) console.error('[LMS] updateThought error:', error);
+    if (!error && data) setThoughts(prev => prev.map(t => t.id === id ? toCamel(data[0]) : t));
+    return { error: error?.message };
+  }
+  async function deleteThought(id) {
+    const { error } = await supabase.from('thoughts').delete().eq('id', id);
+    if (!error) setThoughts(prev => prev.filter(t => t.id !== id));
+    return { error: error?.message };
+  }
+
   // ---- Assessment Responses (admin grading) ----
   async function updateAssessmentResponse(id, updates) {
     const { data, error } = await supabase.from('assessment_responses').update(toSnake(updates)).eq('id', id).select();
@@ -608,6 +632,7 @@ export function DataProvider({ children }) {
     assessmentCandidates, assessmentAttempts, updateAssessmentAttempt,
     assessmentResponses, updateAssessmentResponse,
     assessmentLinks, deleteAssessmentLink,
+    thoughts, addThought, updateThought, deleteThought,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
