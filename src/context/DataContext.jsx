@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { toCamel, toSnake } from '../lib/transforms';
+import { extractPdfCoverThumbnail } from '../lib/pdfCover';
+import { extractEpubCoverThumbnail } from '../lib/epubCover';
 
 const DataContext = createContext();
 
@@ -33,13 +35,16 @@ export function DataProvider({ children }) {
   const [assessmentResponses, setAssessmentResponses] = useState([]);
   const [assessmentLinks, setAssessmentLinks] = useState([]);
   const [thoughts, setThoughts] = useState([]);
+  const [readingHubItems, setReadingHubItems] = useState([]);
+  const [readingHubIdeas, setReadingHubIdeas] = useState([]);
+  const [readingHubPerspectives, setReadingHubPerspectives] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState('connecting');
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes, asmRes, aqRes, acRes, aaRes, arRes, alRes, thRes] = await Promise.all([
+      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes, asmRes, aqRes, acRes, aaRes, arRes, alRes, thRes, rhiRes, rhdRes, rhpRes] = await Promise.all([
         supabase.from('employees').select('*').order('name'),
         supabase.from('trainers').select('*').order('name'),
         supabase.from('programs').select('*').order('name'),
@@ -68,6 +73,9 @@ export function DataProvider({ children }) {
         supabase.from('assessment_responses').select('*'),
         supabase.from('assessment_links').select('*'),
         supabase.from('thoughts').select('*').order('updated_at', { ascending: false }),
+        supabase.from('reading_hub_items').select('*').order('created_at', { ascending: false }),
+        supabase.from('reading_hub_ideas').select('*').order('created_at'),
+        supabase.from('reading_hub_perspectives').select('*').order('created_at', { ascending: false }),
       ]);
 
       const allResults = [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes];
@@ -106,6 +114,9 @@ export function DataProvider({ children }) {
       setAssessmentResponses(toCamel(arRes.data || []));
       setAssessmentLinks(toCamel(alRes.data || []));
       setThoughts(toCamel(thRes.data || []));
+      setReadingHubItems(toCamel(rhiRes.data || []));
+      setReadingHubIdeas(toCamel(rhdRes.data || []));
+      setReadingHubPerspectives(toCamel(rhpRes.data || []));
 
       const filesMap = {};
       (pfRes.data || []).forEach(f => {
@@ -597,6 +608,167 @@ export function DataProvider({ children }) {
     return { error: error?.message };
   }
 
+  // ---- Reading Hub Items ----
+  async function addReadingHubItem(file, overrides = {}) {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `reading-hub/${Date.now()}_${safeName}`;
+    const { error: uploadErr } = await supabase.storage.from('program-files').upload(filePath, file);
+    if (uploadErr) { console.error('[LMS] reading hub upload error:', uploadErr); return { error: uploadErr.message }; }
+    const { data: urlData } = supabase.storage.from('program-files').getPublicUrl(filePath);
+    const row = {
+      id: `LI${Date.now()}${Math.random().toString(36).slice(2, 4)}`,
+      kind: 'document',
+      title: file.name.replace(/\.[^.]+$/, ''),
+      category: 'Reports',
+      chips: ['UPLOAD'],
+      file_type: file.type === 'application/pdf' ? 'PDF' : 'DOCX',
+      file_size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+      mime_type: file.type,
+      size: file.size,
+      storage_path: urlData.publicUrl,
+      ...toSnake(overrides),
+    };
+    const { data, error } = await supabase.from('reading_hub_items').insert(row).select();
+    if (error) { console.error('[LMS] addReadingHubItem error:', error); return { error: error.message }; }
+    setReadingHubItems(prev => [toCamel(data[0]), ...prev]);
+    return { data: toCamel(data[0]), error: null };
+  }
+  async function addReadingHubBook(file, meta = {}) {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `reading-hub/${Date.now()}_${safeName}`;
+    const { error: uploadErr } = await supabase.storage.from('program-files').upload(filePath, file);
+    if (uploadErr) { console.error('[LMS] addReadingHubBook upload error:', uploadErr); return { error: uploadErr.message }; }
+    const { data: urlData } = supabase.storage.from('program-files').getPublicUrl(filePath);
+
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isEpub = file.type === 'application/epub+zip' || file.name.toLowerCase().endsWith('.epub');
+
+    let coverImageUrl = null;
+    try {
+      const thumbBlob = isPdf ? await extractPdfCoverThumbnail(file) : isEpub ? await extractEpubCoverThumbnail(file) : null;
+      if (thumbBlob) {
+        const extByMime = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp' };
+        const coverExt = extByMime[thumbBlob.type] || 'jpg';
+        const coverPath = `reading-hub/covers/${Date.now()}_${safeName}.${coverExt}`;
+        const { error: coverErr } = await supabase.storage.from('program-files').upload(coverPath, thumbBlob, { contentType: thumbBlob.type || 'image/jpeg' });
+        if (coverErr) console.error('[LMS] cover thumbnail upload error:', coverErr);
+        else coverImageUrl = supabase.storage.from('program-files').getPublicUrl(coverPath).data.publicUrl;
+      }
+    } catch (err) {
+      console.error('[LMS] cover extraction error:', err);
+    }
+
+    const row = {
+      id: `LI${Date.now()}${Math.random().toString(36).slice(2, 4)}`,
+      kind: 'book',
+      title: meta.title || file.name.replace(/\.[^.]+$/, ''),
+      author: meta.author || null,
+      category: 'Books',
+      status: 'want-to-read',
+      file_type: isPdf ? 'PDF' : isEpub ? 'EPUB' : 'DOCX',
+      file_size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+      mime_type: file.type,
+      size: file.size,
+      storage_path: urlData.publicUrl,
+      cover_image_url: coverImageUrl,
+    };
+    const { data, error } = await supabase.from('reading_hub_items').insert(row).select();
+    if (error) { console.error('[LMS] addReadingHubBook error:', error); return { error: error.message }; }
+    setReadingHubItems(prev => [toCamel(data[0]), ...prev]);
+    return { data: toCamel(data[0]), error: null };
+  }
+  async function updateReadingHubItem(id, updates) {
+    const payload = { ...toSnake(updates), updated_at: new Date().toISOString() };
+    const { data, error } = await supabase.from('reading_hub_items').update(payload).eq('id', id).select();
+    if (error) { console.error('[LMS] updateReadingHubItem error:', error); return { error: error.message }; }
+    setReadingHubItems(prev => prev.map(i => i.id === id ? toCamel(data[0]) : i));
+    return { error: null };
+  }
+  async function trashReadingHubItem(id) {
+    return updateReadingHubItem(id, { deletedAt: new Date().toISOString() });
+  }
+  async function restoreReadingHubItem(id) {
+    return updateReadingHubItem(id, { deletedAt: null });
+  }
+  async function permanentlyDeleteReadingHubItem(id) {
+    const item = readingHubItems.find(i => i.id === id);
+    if (item?.storagePath) {
+      const path = item.storagePath.split('/program-files/')[1];
+      if (path) await supabase.storage.from('program-files').remove([path]);
+    }
+    const { error } = await supabase.from('reading_hub_items').delete().eq('id', id);
+    if (!error) {
+      setReadingHubItems(prev => prev.filter(i => i.id !== id));
+      setReadingHubIdeas(prev => prev.filter(idea => idea.itemId !== id));
+    }
+    return { error: error?.message };
+  }
+
+  // ---- Reading Hub Ideas ----
+  async function addReadingHubIdea(itemId, idea) {
+    const row = {
+      id: `RHIDEA${Date.now()}${Math.random().toString(36).slice(2, 4)}`,
+      item_id: itemId,
+      chapter: idea.chapter || null,
+      title: idea.title,
+      quote: idea.quote || null,
+      tags: idea.tags || [],
+    };
+    const { data, error } = await supabase.from('reading_hub_ideas').insert(row).select();
+    if (error) { console.error('[LMS] addReadingHubIdea error:', error); return { error: error.message }; }
+    setReadingHubIdeas(prev => [...prev, toCamel(data[0])]);
+    const item = readingHubItems.find(i => i.id === itemId);
+    await updateReadingHubItem(itemId, { ideaCount: (item?.ideaCount || 0) + 1 });
+    return { error: null };
+  }
+  async function updateReadingHubIdea(id, updates) {
+    const payload = {
+      chapter: updates.chapter ?? null,
+      title: updates.title,
+      quote: updates.quote ?? null,
+      tags: updates.tags || [],
+    };
+    const { data, error } = await supabase.from('reading_hub_ideas').update(payload).eq('id', id).select();
+    if (error) { console.error('[LMS] updateReadingHubIdea error:', error); return { error: error.message }; }
+    setReadingHubIdeas(prev => prev.map(i => i.id === id ? toCamel(data[0]) : i));
+    return { error: null };
+  }
+  async function deleteReadingHubIdea(id) {
+    const idea = readingHubIdeas.find(i => i.id === id);
+    const { error } = await supabase.from('reading_hub_ideas').delete().eq('id', id);
+    if (error) { console.error('[LMS] deleteReadingHubIdea error:', error); return { error: error.message }; }
+    setReadingHubIdeas(prev => prev.filter(i => i.id !== id));
+    if (idea) {
+      const item = readingHubItems.find(i => i.id === idea.itemId);
+      if (item) await updateReadingHubItem(item.id, { ideaCount: Math.max(0, (item.ideaCount || 0) - 1) });
+    }
+    return { error: null };
+  }
+
+  // ---- Reading Hub Perspectives ----
+  async function addReadingHubPerspective(itemId, content) {
+    const row = {
+      id: `RHP${Date.now()}${Math.random().toString(36).slice(2, 4)}`,
+      item_id: itemId,
+      content,
+    };
+    const { data, error } = await supabase.from('reading_hub_perspectives').insert(row).select();
+    if (error) { console.error('[LMS] addReadingHubPerspective error:', error); return { error: error.message }; }
+    setReadingHubPerspectives(prev => [toCamel(data[0]), ...prev]);
+    return { error: null };
+  }
+  async function updateReadingHubPerspective(id, content) {
+    const { data, error } = await supabase.from('reading_hub_perspectives').update({ content }).eq('id', id).select();
+    if (error) { console.error('[LMS] updateReadingHubPerspective error:', error); return { error: error.message }; }
+    setReadingHubPerspectives(prev => prev.map(p => p.id === id ? toCamel(data[0]) : p));
+    return { error: null };
+  }
+  async function deleteReadingHubPerspective(id) {
+    const { error } = await supabase.from('reading_hub_perspectives').delete().eq('id', id);
+    if (!error) setReadingHubPerspectives(prev => prev.filter(p => p.id !== id));
+    return { error: error?.message };
+  }
+
   // ---- Assessment Responses (admin grading) ----
   async function updateAssessmentResponse(id, updates) {
     const { data, error } = await supabase.from('assessment_responses').update(toSnake(updates)).eq('id', id).select();
@@ -633,6 +805,9 @@ export function DataProvider({ children }) {
     assessmentResponses, updateAssessmentResponse,
     assessmentLinks, deleteAssessmentLink,
     thoughts, addThought, updateThought, deleteThought,
+    readingHubItems, addReadingHubItem, addReadingHubBook, updateReadingHubItem, trashReadingHubItem, restoreReadingHubItem, permanentlyDeleteReadingHubItem,
+    readingHubIdeas, addReadingHubIdea, updateReadingHubIdea, deleteReadingHubIdea,
+    readingHubPerspectives, addReadingHubPerspective, updateReadingHubPerspective, deleteReadingHubPerspective,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

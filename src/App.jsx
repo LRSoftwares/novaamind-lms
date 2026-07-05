@@ -11,7 +11,8 @@ import Reports from './pages/Reports';
 import Trainers from './pages/Trainers';
 import Integrations from './pages/Integrations';
 import Assessments from './pages/Assessments';
-import ThoughtRepository from './pages/ThoughtRepository';
+import ThoughtLabApp from './pages/thought-lab/ThoughtLabApp';
+import ReadingHubApp from './pages/thought-lab/reading-hub/ReadingHubApp';
 import Login from './pages/Login';
 import AssessmentLanding from './pages/AssessmentLanding';
 import AssessmentRegister from './pages/AssessmentRegister';
@@ -23,26 +24,23 @@ function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <DataProvider>
-      <div className="flex h-screen bg-surface">
-        <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-        <main className={`flex-1 overflow-auto transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-20'}`}>
-          <div className="p-6">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/programs" element={<Programs />} />
-              <Route path="/sessions" element={<Sessions />} />
-              <Route path="/companies" element={<Company />} />
-              <Route path="/trainers" element={<Trainers />} />
-              <Route path="/assessments" element={<Assessments />} />
-              <Route path="/thought-repo/*" element={<ThoughtRepository />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/integrations" element={<Integrations />} />
-            </Routes>
-          </div>
-        </main>
-      </div>
-    </DataProvider>
+    <div className="flex h-screen bg-surface">
+      <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+      <main className={`flex-1 overflow-auto transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-20'}`}>
+        <div className="p-6">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/programs" element={<Programs />} />
+            <Route path="/sessions" element={<Sessions />} />
+            <Route path="/companies" element={<Company />} />
+            <Route path="/trainers" element={<Trainers />} />
+            <Route path="/assessments" element={<Assessments />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/integrations" element={<Integrations />} />
+          </Routes>
+        </div>
+      </main>
+    </div>
   );
 }
 
@@ -62,7 +60,15 @@ function AuthGate() {
 
   if (!user) return <Login />;
 
-  return <AdminLayout />;
+  return (
+    <DataProvider>
+      <Routes>
+        <Route path="/reading-hub/*" element={<ReadingHubApp />} />
+        <Route path="/thought-lab/*" element={<ThoughtLabApp />} />
+        <Route path="/*" element={<AdminLayout />} />
+      </Routes>
+    </DataProvider>
+  );
 }
 
 function AppRoutes() {

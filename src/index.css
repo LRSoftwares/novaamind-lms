@@ -10,6 +10,41 @@
   --color-surface: #f8fafc;
   --color-sidebar: #0f172a;
   --color-sidebar-hover: #1e293b;
+
+  /* NovaaMind Intellectual OS (Thought Lab) design system */
+  --color-ios-bg: #fcf8fb;
+  --color-ios-surface: #ffffff;
+  --color-ios-surface-alt: #f6f2f5;
+  --color-ios-border: #e4e4e7;
+  --color-ios-primary: #0050cb;
+  --color-ios-primary-container: #0066ff;
+  --color-ios-text: #1c1b1d;
+  --color-ios-text-muted: #6b6f80;
+}
+
+/* Reading Hub design tokens (Stitch "Personal Reading Library" system) — scoped so they don't leak into the rest of the app */
+.reading-hub {
+  --rh-primary: #0058be;
+  --rh-on-primary: #ffffff;
+  --rh-primary-container: #2170e4;
+  --rh-on-primary-container: #fefcff;
+  --rh-secondary: #505f76;
+  --rh-secondary-container: #d0e1fb;
+  --rh-on-secondary-container: #54647a;
+  --rh-tertiary: #924700;
+  --rh-tertiary-fixed: #ffdcc6;
+  --rh-on-tertiary-fixed: #311400;
+  --rh-background: #f7f9fb;
+  --rh-surface: #f7f9fb;
+  --rh-surface-container-lowest: #ffffff;
+  --rh-surface-container-low: #f2f4f6;
+  --rh-surface-container: #eceef0;
+  --rh-surface-container-high: #e6e8ea;
+  --rh-surface-container-highest: #e0e3e5;
+  --rh-on-surface: #191c1e;
+  --rh-on-surface-variant: #424754;
+  --rh-outline: #727785;
+  --rh-outline-variant: #c2c6d6;
 }
 
 body {

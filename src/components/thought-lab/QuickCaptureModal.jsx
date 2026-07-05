@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, Brain, Zap } from 'lucide-react';
+import { Plus, X, Zap } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-
-const CATEGORIES = ['Quick Thought', 'Observation', 'Framework', 'Story', 'Lesson', 'Research', 'Quote', 'LinkedIn', 'Book Idea'];
+import { CATEGORIES } from '../../pages/thought-lab/constants';
 
 export default function QuickCaptureModal() {
   const { addThought } = useData();
@@ -35,12 +34,13 @@ export default function QuickCaptureModal() {
       content,
       contentText: form.content,
       category: form.category,
-      status: 'Idea',
+      stage: 'Idea',
+      importance: 'Medium',
       tags,
       pillar: '',
       audience: '',
-      isPinned: false,
-      isFavourite: false,
+      reuseScore: 0,
+      aiInsights: [],
       readingTime: 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -59,7 +59,7 @@ export default function QuickCaptureModal() {
       <button
         onClick={() => setOpen(true)}
         title="Quick Capture (Cmd+N)"
-        className="fixed bottom-8 right-8 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-xl hover:bg-indigo-700 flex items-center justify-center transition-all hover:scale-110 z-40"
+        className="fixed bottom-8 right-8 w-14 h-14 bg-[var(--color-ios-primary)] text-white rounded-full shadow-xl hover:opacity-90 flex items-center justify-center transition-all hover:scale-105 z-40"
       >
         <Plus className="w-6 h-6" />
       </button>
@@ -67,40 +67,38 @@ export default function QuickCaptureModal() {
       {open && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onKeyDown={handleKeyDown}>
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[var(--color-ios-border)]">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-indigo-100 rounded-lg flex items-center justify-center">
-                  <Zap className="w-4 h-4 text-indigo-600" />
+                <div className="w-7 h-7 bg-[var(--color-ios-primary)]/10 rounded-lg flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-[var(--color-ios-primary)]" />
                 </div>
-                <h3 className="font-semibold text-gray-900">Quick Capture</h3>
+                <h3 className="font-semibold text-[var(--color-ios-text)]">Quick Capture</h3>
               </div>
-              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-[var(--color-ios-surface-alt)] text-[var(--color-ios-text-muted)] transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Body */}
             <div className="px-6 py-4 space-y-3">
               <input
                 autoFocus
                 value={form.title}
                 onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
                 placeholder="What's the idea?"
-                className="w-full text-xl font-semibold text-gray-900 border-none outline-none placeholder-gray-300 bg-transparent"
+                className="w-full text-xl font-semibold text-[var(--color-ios-text)] border-none outline-none placeholder-gray-300 bg-transparent"
               />
               <textarea
                 value={form.content}
                 onChange={e => setForm(prev => ({ ...prev, content: e.target.value }))}
                 placeholder="Expand on it... (optional)"
                 rows={4}
-                className="w-full text-sm text-gray-700 border border-gray-200 rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-300"
+                className="w-full text-sm text-[var(--color-ios-text)] border border-[var(--color-ios-border)] rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--color-ios-primary)]/30 placeholder-gray-300"
               />
               <div className="flex gap-2">
                 <select
                   value={form.category}
                   onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))}
-                  className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-700"
+                  className="flex-1 text-sm border border-[var(--color-ios-border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-ios-primary)]/30 bg-white text-[var(--color-ios-text)]"
                 >
                   {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                 </select>
@@ -108,22 +106,21 @@ export default function QuickCaptureModal() {
                   value={form.tags}
                   onChange={e => setForm(prev => ({ ...prev, tags: e.target.value }))}
                   placeholder="Tags, comma-separated"
-                  className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-300"
+                  className="flex-1 text-sm border border-[var(--color-ios-border)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-ios-primary)]/30 placeholder-gray-300"
                 />
               </div>
             </div>
 
-            {/* Footer */}
             <div className="flex items-center justify-between px-6 pb-5">
-              <p className="text-xs text-gray-400">Cmd+Enter to save</p>
+              <p className="text-xs text-[var(--color-ios-text-muted)]">Cmd+Enter to save</p>
               <div className="flex gap-2">
-                <button onClick={() => setOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
+                <button onClick={() => setOpen(false)} className="px-4 py-2 text-sm text-[var(--color-ios-text-muted)] hover:bg-[var(--color-ios-surface-alt)] rounded-xl transition-colors">
                   Cancel
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={saving || (!form.title.trim() && !form.content.trim())}
-                  className="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                  className="px-5 py-2 bg-[var(--color-ios-primary)] text-white text-sm font-medium rounded-xl hover:opacity-90 disabled:opacity-50 transition-opacity"
                 >
                   {saving ? 'Saving...' : 'Capture'}
                 </button>
