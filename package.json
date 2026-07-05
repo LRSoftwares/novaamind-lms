@@ -29,6 +29,8 @@
     "@tiptap/starter-kit": "^3.27.1",
     "date-fns": "^4.4.0",
     "epubjs": "^0.3.93",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "lucide-react": "^1.21.0",
     "papaparse": "^5.5.4",

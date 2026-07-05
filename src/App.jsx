@@ -10,6 +10,7 @@ import Company from './pages/Company';
 import Reports from './pages/Reports';
 import Trainers from './pages/Trainers';
 import Integrations from './pages/Integrations';
+import Invoices from './pages/Invoices';
 import Assessments from './pages/Assessments';
 import ThoughtLabApp from './pages/thought-lab/ThoughtLabApp';
 import ReadingHubApp from './pages/thought-lab/reading-hub/ReadingHubApp';
@@ -36,6 +37,7 @@ function AdminLayout() {
             <Route path="/trainers" element={<Trainers />} />
             <Route path="/assessments" element={<Assessments />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/invoices" element={<Invoices />} />
             <Route path="/integrations" element={<Integrations />} />
           </Routes>
         </div>
