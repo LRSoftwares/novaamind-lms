@@ -38,13 +38,15 @@ export function DataProvider({ children }) {
   const [readingHubItems, setReadingHubItems] = useState([]);
   const [readingHubIdeas, setReadingHubIdeas] = useState([]);
   const [readingHubPerspectives, setReadingHubPerspectives] = useState([]);
+  const [readingHubCollections, setReadingHubCollections] = useState([]);
+  const [readingHubCollectionItems, setReadingHubCollectionItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState('connecting');
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes, asmRes, aqRes, acRes, aaRes, arRes, alRes, thRes, rhiRes, rhdRes, rhpRes] = await Promise.all([
+      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes, asmRes, aqRes, acRes, aaRes, arRes, alRes, thRes, rhiRes, rhdRes, rhpRes, rhcRes, rhciRes] = await Promise.all([
         supabase.from('employees').select('*').order('name'),
         supabase.from('trainers').select('*').order('name'),
         supabase.from('programs').select('*').order('name'),
@@ -76,6 +78,8 @@ export function DataProvider({ children }) {
         supabase.from('reading_hub_items').select('*').order('created_at', { ascending: false }),
         supabase.from('reading_hub_ideas').select('*').order('created_at'),
         supabase.from('reading_hub_perspectives').select('*').order('created_at', { ascending: false }),
+        supabase.from('reading_hub_collections').select('*').order('created_at'),
+        supabase.from('reading_hub_collection_items').select('*'),
       ]);
 
       const allResults = [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes];
@@ -117,6 +121,8 @@ export function DataProvider({ children }) {
       setReadingHubItems(toCamel(rhiRes.data || []));
       setReadingHubIdeas(toCamel(rhdRes.data || []));
       setReadingHubPerspectives(toCamel(rhpRes.data || []));
+      setReadingHubCollections(toCamel(rhcRes.data || []));
+      setReadingHubCollectionItems(toCamel(rhciRes.data || []));
 
       const filesMap = {};
       (pfRes.data || []).forEach(f => {
@@ -663,7 +669,7 @@ export function DataProvider({ children }) {
       kind: 'book',
       title: meta.title || file.name.replace(/\.[^.]+$/, ''),
       author: meta.author || null,
-      category: 'Books',
+      category: meta.category || 'Books',
       status: 'want-to-read',
       file_type: isPdf ? 'PDF' : isEpub ? 'EPUB' : 'DOCX',
       file_size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
@@ -769,6 +775,51 @@ export function DataProvider({ children }) {
     return { error: error?.message };
   }
 
+  // ---- Reading Hub Collections ----
+  async function addReadingHubCollection(collection) {
+    const row = {
+      id: `RHC${Date.now()}${Math.random().toString(36).slice(2, 4)}`,
+      name: collection.name,
+      description: collection.description || null,
+      color_start: collection.colorStart || '#0058be',
+      color_end: collection.colorEnd || '#2170e4',
+    };
+    const { data, error } = await supabase.from('reading_hub_collections').insert(row).select();
+    if (error) { console.error('[LMS] addReadingHubCollection error:', error); return { error: error.message }; }
+    setReadingHubCollections(prev => [...prev, toCamel(data[0])]);
+    return { data: toCamel(data[0]), error: null };
+  }
+  async function updateReadingHubCollection(id, updates) {
+    const payload = { ...toSnake(updates), updated_at: new Date().toISOString() };
+    const { data, error } = await supabase.from('reading_hub_collections').update(payload).eq('id', id).select();
+    if (error) { console.error('[LMS] updateReadingHubCollection error:', error); return { error: error.message }; }
+    setReadingHubCollections(prev => prev.map(c => c.id === id ? toCamel(data[0]) : c));
+    return { error: null };
+  }
+  async function deleteReadingHubCollection(id) {
+    const { error } = await supabase.from('reading_hub_collections').delete().eq('id', id);
+    if (!error) {
+      setReadingHubCollections(prev => prev.filter(c => c.id !== id));
+      setReadingHubCollectionItems(prev => prev.filter(ci => ci.collectionId !== id));
+    }
+    return { error: error?.message };
+  }
+  async function addItemToCollection(collectionId, itemId) {
+    if (readingHubCollectionItems.some(ci => ci.collectionId === collectionId && ci.itemId === itemId)) {
+      return { error: null };
+    }
+    const row = { id: `RHCI${Date.now()}${Math.random().toString(36).slice(2, 4)}`, collection_id: collectionId, item_id: itemId };
+    const { data, error } = await supabase.from('reading_hub_collection_items').insert(row).select();
+    if (error) { console.error('[LMS] addItemToCollection error:', error); return { error: error.message }; }
+    setReadingHubCollectionItems(prev => [...prev, toCamel(data[0])]);
+    return { error: null };
+  }
+  async function removeItemFromCollection(collectionId, itemId) {
+    const { error } = await supabase.from('reading_hub_collection_items').delete().eq('collection_id', collectionId).eq('item_id', itemId);
+    if (!error) setReadingHubCollectionItems(prev => prev.filter(ci => !(ci.collectionId === collectionId && ci.itemId === itemId)));
+    return { error: error?.message };
+  }
+
   // ---- Assessment Responses (admin grading) ----
   async function updateAssessmentResponse(id, updates) {
     const { data, error } = await supabase.from('assessment_responses').update(toSnake(updates)).eq('id', id).select();
@@ -808,6 +859,8 @@ export function DataProvider({ children }) {
     readingHubItems, addReadingHubItem, addReadingHubBook, updateReadingHubItem, trashReadingHubItem, restoreReadingHubItem, permanentlyDeleteReadingHubItem,
     readingHubIdeas, addReadingHubIdea, updateReadingHubIdea, deleteReadingHubIdea,
     readingHubPerspectives, addReadingHubPerspective, updateReadingHubPerspective, deleteReadingHubPerspective,
+    readingHubCollections, addReadingHubCollection, updateReadingHubCollection, deleteReadingHubCollection,
+    readingHubCollectionItems, addItemToCollection, removeItemFromCollection,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

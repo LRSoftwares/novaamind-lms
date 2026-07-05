@@ -1,24 +1,22 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeft, Play, PlusCircle, Share2, Info, Brain, Wand2, Lightbulb, Plus, Trash2, BookOpen, Pencil } from 'lucide-react';
 import BookCover from './BookCover';
 import EpubReader from './EpubReader';
 import ReadPane from './ReadPane';
-import Modal from '../../../components/Modal';
+import CaptureThoughtModal from './CaptureThoughtModal';
 import { useData } from '../../../context/DataContext';
 
 const TABS = ['Overview', 'Read', 'Ideas', 'Highlights', 'Perspectives', 'Content'];
 
-const inputClass = 'w-full text-sm border border-[var(--rh-outline-variant)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--rh-primary)]/20 focus:border-[var(--rh-primary)]';
-
-function IdeaCard({ idea, onEdit, onDelete }) {
+function IdeaCard({ thought, onEdit, onDelete }) {
   return (
     <div className="p-6 rounded-[24px] border border-[var(--rh-outline-variant)] bg-white/80 backdrop-blur hover:shadow-md transition-all">
       <div className="flex justify-between items-start mb-4">
         <Lightbulb className="w-5 h-5 text-[var(--rh-primary)]" fill="currentColor" />
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[var(--rh-on-surface-variant)]">{idea.chapter}</span>
+          <span className="text-xs text-[var(--rh-on-surface-variant)]">{thought.sourceChapter}</span>
           <button onClick={onEdit} className="text-[var(--rh-on-surface-variant)] hover:text-[var(--rh-primary)] transition-colors" title="Edit">
             <Pencil className="w-3.5 h-3.5" />
           </button>
@@ -27,10 +25,10 @@ function IdeaCard({ idea, onEdit, onDelete }) {
           </button>
         </div>
       </div>
-      <p className="text-sm font-semibold text-[var(--rh-on-surface)] mb-2 line-clamp-2">{idea.title}</p>
-      <p className="text-xs text-[var(--rh-on-surface-variant)] italic mb-4">"{idea.quote}"</p>
+      <p className="text-sm font-semibold text-[var(--rh-on-surface)] mb-2 line-clamp-2">{thought.title}</p>
+      {thought.originalHighlight && <p className="text-xs text-[var(--rh-on-surface-variant)] italic mb-4">"{thought.originalHighlight}"</p>}
       <div className="flex gap-2 flex-wrap">
-        {(idea.tags || []).map(tag => (
+        {(thought.tags || []).map(tag => (
           <span key={tag} className="text-[10px] bg-[var(--rh-surface-container-high)] px-2 py-0.5 rounded text-[var(--rh-on-surface-variant)]">
             {tag}
           </span>
@@ -40,13 +38,13 @@ function IdeaCard({ idea, onEdit, onDelete }) {
   );
 }
 
-function PerspectiveCard({ perspective, onEdit, onDelete }) {
+function PerspectiveCard({ thought, onEdit, onDelete }) {
   return (
     <div className="p-6 rounded-[24px] border border-[var(--rh-outline-variant)] bg-white/80 backdrop-blur hover:shadow-md transition-all">
       <div className="flex justify-between items-start mb-3">
         <Share2 className="w-5 h-5 text-[var(--rh-primary)]" />
         <div className="flex items-center gap-3">
-          <span className="text-xs text-[var(--rh-on-surface-variant)]">{formatDistanceToNow(new Date(perspective.createdAt), { addSuffix: true })}</span>
+          <span className="text-xs text-[var(--rh-on-surface-variant)]">{formatDistanceToNow(new Date(thought.createdAt), { addSuffix: true })}</span>
           <button onClick={onEdit} className="text-[var(--rh-on-surface-variant)] hover:text-[var(--rh-primary)] transition-colors" title="Edit">
             <Pencil className="w-3.5 h-3.5" />
           </button>
@@ -55,7 +53,7 @@ function PerspectiveCard({ perspective, onEdit, onDelete }) {
           </button>
         </div>
       </div>
-      <p className="text-sm text-[var(--rh-on-surface)] leading-relaxed whitespace-pre-wrap">{perspective.content}</p>
+      <p className="text-sm text-[var(--rh-on-surface)] leading-relaxed whitespace-pre-wrap">{thought.myPerspective || thought.contentText}</p>
     </div>
   );
 }
@@ -63,20 +61,18 @@ function PerspectiveCard({ perspective, onEdit, onDelete }) {
 export default function BookDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const {
-    readingHubItems, readingHubIdeas, addReadingHubIdea, updateReadingHubIdea, deleteReadingHubIdea,
-    readingHubPerspectives, addReadingHubPerspective, updateReadingHubPerspective, deleteReadingHubPerspective,
-  } = useData();
-  const [activeTab, setActiveTab] = useState('Overview');
-  const [ideaModalOpen, setIdeaModalOpen] = useState(false);
-  const [ideaForm, setIdeaForm] = useState({ chapter: '', title: '', quote: '', tags: '' });
-  const [editingIdeaId, setEditingIdeaId] = useState(null);
-  const [savingIdea, setSavingIdea] = useState(false);
-  const [perspectiveModalOpen, setPerspectiveModalOpen] = useState(false);
-  const [perspectiveText, setPerspectiveText] = useState('');
-  const [editingPerspectiveId, setEditingPerspectiveId] = useState(null);
-  const [savingPerspective, setSavingPerspective] = useState(false);
+  const location = useLocation();
+  const { readingHubItems, thoughts, deleteThought, updateReadingHubItem } = useData();
+  const [activeTab, setActiveTab] = useState(location.state?.tab || 'Overview');
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [captureSubtype, setCaptureSubtype] = useState('idea');
+  const [captureContent, setCaptureContent] = useState('');
+  const [editingThought, setEditingThought] = useState(null);
   const item = readingHubItems.find(i => i.id === id);
+
+  const bookThoughts = useMemo(() => thoughts.filter(t => t.sourceId === item?.id), [thoughts, item?.id]);
+  const topIdeas = useMemo(() => bookThoughts.filter(t => t.thoughtSubtype === 'idea'), [bookThoughts]);
+  const perspectives = useMemo(() => bookThoughts.filter(t => t.thoughtSubtype === 'perspective'), [bookThoughts]);
 
   if (!item || item.kind !== 'book') {
     return (
@@ -90,65 +86,39 @@ export default function BookDetail() {
   }
 
   const hasSummary = item.summaryCoreTheme || item.summaryKeyTakeaway || item.summaryApplication;
-  const topIdeas = readingHubIdeas.filter(idea => idea.itemId === item.id);
-  const perspectives = readingHubPerspectives.filter(p => p.itemId === item.id);
 
-  const openIdeaModal = (prefillQuote = '') => {
-    setEditingIdeaId(null);
-    setIdeaForm({ chapter: '', title: '', quote: prefillQuote, tags: '' });
-    setIdeaModalOpen(true);
+  const openCapture = (subtype, prefillContent = '') => {
+    setEditingThought(null);
+    setCaptureSubtype(subtype);
+    setCaptureContent(prefillContent);
+    setCaptureOpen(true);
   };
 
-  const openEditIdeaModal = (idea) => {
-    setEditingIdeaId(idea.id);
-    setIdeaForm({ chapter: idea.chapter || '', title: idea.title || '', quote: idea.quote || '', tags: (idea.tags || []).join(', ') });
-    setIdeaModalOpen(true);
+  const openEditCapture = (thought) => {
+    setEditingThought(thought);
+    setCaptureOpen(true);
   };
 
-  const handleSaveIdea = async () => {
-    if (!ideaForm.title.trim()) return;
-    setSavingIdea(true);
-    const payload = {
-      chapter: ideaForm.chapter.trim(),
-      title: ideaForm.title.trim(),
-      quote: ideaForm.quote.trim(),
-      tags: ideaForm.tags.split(',').map(t => t.trim()).filter(Boolean),
-    };
-    if (editingIdeaId) await updateReadingHubIdea(editingIdeaId, payload);
-    else await addReadingHubIdea(item.id, payload);
-    setSavingIdea(false);
-    setIdeaModalOpen(false);
-    setEditingIdeaId(null);
+  const handleDeleteThought = (thought) => {
+    if (window.confirm('Delete this thought?')) deleteThought(thought.id);
   };
 
-  const handleDeleteIdea = (idea) => {
-    if (window.confirm('Delete this idea?')) deleteReadingHubIdea(idea.id);
+  const handleOpen = () => updateReadingHubItem(item.id, { lastOpenedAt: new Date().toISOString() });
+
+  const handlePositionChange = ({ cfi, location: readingLocation, totalLocations, percentage }) => {
+    const updates = { readingCfi: cfi, lastSavedAt: new Date().toISOString() };
+    if (readingLocation != null) updates.readingLocation = readingLocation;
+    if (totalLocations != null) updates.totalLocations = totalLocations;
+    if (percentage != null) updates.progress = Math.round(percentage * 100);
+    if (item.status === 'want-to-read') updates.status = 'currently-reading';
+    updateReadingHubItem(item.id, updates);
   };
 
-  const openPerspectiveModal = (prefillText = '') => {
-    setEditingPerspectiveId(null);
-    setPerspectiveText(prefillText);
-    setPerspectiveModalOpen(true);
-  };
-
-  const openEditPerspectiveModal = (perspective) => {
-    setEditingPerspectiveId(perspective.id);
-    setPerspectiveText(perspective.content || '');
-    setPerspectiveModalOpen(true);
-  };
-
-  const handleSavePerspective = async () => {
-    if (!perspectiveText.trim()) return;
-    setSavingPerspective(true);
-    if (editingPerspectiveId) await updateReadingHubPerspective(editingPerspectiveId, perspectiveText.trim());
-    else await addReadingHubPerspective(item.id, perspectiveText.trim());
-    setSavingPerspective(false);
-    setPerspectiveModalOpen(false);
-    setEditingPerspectiveId(null);
-  };
-
-  const handleDeletePerspective = (perspectiveId) => {
-    if (window.confirm('Delete this perspective?')) deleteReadingHubPerspective(perspectiveId);
+  const captureSource = {
+    sourceId: item.id,
+    sourceType: 'book',
+    sourceTitle: item.title,
+    sourceAuthor: item.author,
   };
 
   return (
@@ -174,6 +144,11 @@ export default function BookDetail() {
               <div className="w-full bg-[var(--rh-surface-container-highest)] h-2 rounded-full overflow-hidden">
                 <div className="bg-[var(--rh-primary)] h-full" style={{ width: `${item.progress}%` }} />
               </div>
+              {item.readingLocation != null && item.totalLocations != null && (
+                <p className="text-[11px] text-[var(--rh-on-surface-variant)] mt-2">
+                  Chapter {item.readingLocation} of {item.totalLocations}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -205,13 +180,13 @@ export default function BookDetail() {
               <Play className="w-4.5 h-4.5" fill="currentColor" /> Continue Reading
             </button>
             <button
-              onClick={openIdeaModal}
+              onClick={() => openCapture('idea')}
               className="bg-[var(--rh-surface-container-lowest)] border border-[var(--rh-outline-variant)] text-[var(--rh-on-surface)] px-6 py-3.5 rounded-full font-semibold flex items-center gap-2 hover:bg-[var(--rh-surface-container-low)] active:scale-95 transition-all"
             >
               <PlusCircle className="w-4.5 h-4.5" /> Capture Idea
             </button>
             <button
-              onClick={openPerspectiveModal}
+              onClick={() => openCapture('perspective')}
               className="bg-[var(--rh-surface-container-lowest)] border border-[var(--rh-outline-variant)] text-[var(--rh-on-surface)] px-6 py-3.5 rounded-full font-semibold flex items-center gap-2 hover:bg-[var(--rh-surface-container-low)] active:scale-95 transition-all"
             >
               <Share2 className="w-4.5 h-4.5" /> Add Perspective
@@ -228,8 +203,8 @@ export default function BookDetail() {
                 }`}
               >
                 {tab}
-                {tab === 'Ideas' && item.ideaCount > 0 && (
-                  <span className="bg-[var(--rh-surface-container-high)] px-2 rounded-full text-xs">{item.ideaCount}</span>
+                {tab === 'Ideas' && topIdeas.length > 0 && (
+                  <span className="bg-[var(--rh-surface-container-high)] px-2 rounded-full text-xs">{topIdeas.length}</span>
                 )}
               </button>
             ))}
@@ -288,16 +263,16 @@ export default function BookDetail() {
                   <h3 className="text-lg font-bold text-[var(--rh-on-surface)]">Top Ideas</h3>
                   {topIdeas.length > 0 && (
                     <button onClick={() => setActiveTab('Ideas')} className="text-[var(--rh-primary)] text-sm hover:underline">
-                      View all {item.ideaCount || topIdeas.length} ideas
+                      View all {topIdeas.length} ideas
                     </button>
                   )}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {topIdeas.map(idea => (
-                    <IdeaCard key={idea.id} idea={idea} onEdit={() => openEditIdeaModal(idea)} onDelete={() => handleDeleteIdea(idea)} />
+                  {topIdeas.map(thought => (
+                    <IdeaCard key={thought.id} thought={thought} onEdit={() => openEditCapture(thought)} onDelete={() => handleDeleteThought(thought)} />
                   ))}
                   <button
-                    onClick={openIdeaModal}
+                    onClick={() => openCapture('idea')}
                     className="p-6 rounded-[24px] border-2 border-dashed border-[var(--rh-outline-variant)] flex flex-col items-center justify-center text-[var(--rh-on-surface-variant)] hover:text-[var(--rh-primary)] cursor-pointer transition-colors"
                   >
                     <Plus className="w-7 h-7 mb-2" />
@@ -316,7 +291,14 @@ export default function BookDetail() {
               ) : (
                 <ReadPane title={item.title}>
                   {item.fileType === 'EPUB' ? (
-                    <EpubReader url={item.storagePath} onCaptureIdea={openIdeaModal} onAddPerspective={openPerspectiveModal} />
+                    <EpubReader
+                      url={item.storagePath}
+                      initialCfi={item.readingCfi}
+                      onPositionChange={handlePositionChange}
+                      onOpen={handleOpen}
+                      onCaptureIdea={(text) => openCapture('idea', text)}
+                      onAddPerspective={(text) => openCapture('perspective', text)}
+                    />
                   ) : (
                     <iframe
                       src={item.storagePath}
@@ -334,7 +316,7 @@ export default function BookDetail() {
                   <Lightbulb className="w-8 h-8 mb-3" />
                   <p className="text-sm mb-4">No ideas captured yet.</p>
                   <button
-                    onClick={openIdeaModal}
+                    onClick={() => openCapture('idea')}
                     className="bg-[var(--rh-primary)] text-[var(--rh-on-primary)] px-5 py-2.5 rounded-full text-sm font-semibold hover:brightness-110 transition-all"
                   >
                     Capture Idea
@@ -342,11 +324,11 @@ export default function BookDetail() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {topIdeas.map(idea => (
-                    <IdeaCard key={idea.id} idea={idea} onEdit={() => openEditIdeaModal(idea)} onDelete={() => handleDeleteIdea(idea)} />
+                  {topIdeas.map(thought => (
+                    <IdeaCard key={thought.id} thought={thought} onEdit={() => openEditCapture(thought)} onDelete={() => handleDeleteThought(thought)} />
                   ))}
                   <button
-                    onClick={openIdeaModal}
+                    onClick={() => openCapture('idea')}
                     className="p-6 rounded-[24px] border-2 border-dashed border-[var(--rh-outline-variant)] flex flex-col items-center justify-center text-[var(--rh-on-surface-variant)] hover:text-[var(--rh-primary)] cursor-pointer transition-colors"
                   >
                     <Plus className="w-7 h-7 mb-2" />
@@ -362,7 +344,7 @@ export default function BookDetail() {
                   <Share2 className="w-8 h-8 mb-3" />
                   <p className="text-sm mb-4">No perspectives captured yet.</p>
                   <button
-                    onClick={openPerspectiveModal}
+                    onClick={() => openCapture('perspective')}
                     className="bg-[var(--rh-primary)] text-[var(--rh-on-primary)] px-5 py-2.5 rounded-full text-sm font-semibold hover:brightness-110 transition-all"
                   >
                     Add Perspective
@@ -370,11 +352,11 @@ export default function BookDetail() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {perspectives.map(p => (
-                    <PerspectiveCard key={p.id} perspective={p} onEdit={() => openEditPerspectiveModal(p)} onDelete={() => handleDeletePerspective(p.id)} />
+                  {perspectives.map(thought => (
+                    <PerspectiveCard key={thought.id} thought={thought} onEdit={() => openEditCapture(thought)} onDelete={() => handleDeleteThought(thought)} />
                   ))}
                   <button
-                    onClick={openPerspectiveModal}
+                    onClick={() => openCapture('perspective')}
                     className="p-6 rounded-[24px] border-2 border-dashed border-[var(--rh-outline-variant)] flex flex-col items-center justify-center text-[var(--rh-on-surface-variant)] hover:text-[var(--rh-primary)] cursor-pointer transition-colors min-h-[140px]"
                   >
                     <Plus className="w-7 h-7 mb-2" />
@@ -391,73 +373,14 @@ export default function BookDetail() {
         </div>
       </div>
 
-      <Modal open={ideaModalOpen} onClose={() => setIdeaModalOpen(false)} title={editingIdeaId ? 'Edit Idea' : 'Capture Idea'}>
-        <div className="space-y-3">
-          <input
-            autoFocus
-            value={ideaForm.title}
-            onChange={e => setIdeaForm(prev => ({ ...prev, title: e.target.value }))}
-            placeholder="Idea title"
-            className={inputClass}
-          />
-          <input
-            value={ideaForm.chapter}
-            onChange={e => setIdeaForm(prev => ({ ...prev, chapter: e.target.value }))}
-            placeholder="Chapter or section (optional)"
-            className={inputClass}
-          />
-          <textarea
-            value={ideaForm.quote}
-            onChange={e => setIdeaForm(prev => ({ ...prev, quote: e.target.value }))}
-            placeholder="Quote or note (optional)"
-            rows={3}
-            className={`${inputClass} resize-none`}
-          />
-          <input
-            value={ideaForm.tags}
-            onChange={e => setIdeaForm(prev => ({ ...prev, tags: e.target.value }))}
-            placeholder="Tags, comma-separated"
-            className={inputClass}
-          />
-          <div className="flex justify-end gap-2 pt-2">
-            <button onClick={() => setIdeaModalOpen(false)} className="px-4 py-2 text-sm text-[var(--rh-on-surface-variant)] hover:bg-[var(--rh-surface-container-low)] rounded-lg transition-colors">
-              Cancel
-            </button>
-            <button
-              onClick={handleSaveIdea}
-              disabled={savingIdea || !ideaForm.title.trim()}
-              className="px-5 py-2 bg-[var(--rh-primary)] text-[var(--rh-on-primary)] text-sm font-semibold rounded-lg hover:brightness-110 disabled:opacity-50 transition-all"
-            >
-              {savingIdea ? 'Saving...' : editingIdeaId ? 'Save Changes' : 'Save Idea'}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal open={perspectiveModalOpen} onClose={() => setPerspectiveModalOpen(false)} title={editingPerspectiveId ? 'Edit Perspective' : 'Add Perspective'}>
-        <div className="space-y-3">
-          <textarea
-            autoFocus
-            value={perspectiveText}
-            onChange={e => setPerspectiveText(e.target.value)}
-            placeholder="What's your take on this book? How does it connect to what you're working on?"
-            rows={6}
-            className={`${inputClass} resize-none`}
-          />
-          <div className="flex justify-end gap-2 pt-2">
-            <button onClick={() => setPerspectiveModalOpen(false)} className="px-4 py-2 text-sm text-[var(--rh-on-surface-variant)] hover:bg-[var(--rh-surface-container-low)] rounded-lg transition-colors">
-              Cancel
-            </button>
-            <button
-              onClick={handleSavePerspective}
-              disabled={savingPerspective}
-              className="px-5 py-2 bg-[var(--rh-primary)] text-[var(--rh-on-primary)] text-sm font-semibold rounded-lg hover:brightness-110 disabled:opacity-50 transition-all"
-            >
-              {savingPerspective ? 'Saving...' : editingPerspectiveId ? 'Save Changes' : 'Save Perspective'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <CaptureThoughtModal
+        open={captureOpen}
+        onClose={() => setCaptureOpen(false)}
+        initialSource={captureSource}
+        initialSubtype={captureSubtype}
+        initialContent={captureContent}
+        editingThought={editingThought}
+      />
     </div>
   );
 }

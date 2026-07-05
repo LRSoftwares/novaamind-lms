@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import { useData } from '../../../context/DataContext';
+import { CATEGORY_GROUPS } from './constants';
 
 const inputClass = 'w-full text-sm border border-[var(--rh-outline-variant)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--rh-primary)]/20 focus:border-[var(--rh-primary)]';
 
@@ -9,6 +10,7 @@ export default function AddBookModal({ open, onClose }) {
   const { addReadingHubBook } = useData();
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
+  const [category, setCategory] = useState('Books');
   const [file, setFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -17,6 +19,7 @@ export default function AddBookModal({ open, onClose }) {
   const reset = () => {
     setTitle('');
     setAuthor('');
+    setCategory('Books');
     setFile(null);
     setError('');
   };
@@ -30,7 +33,7 @@ export default function AddBookModal({ open, onClose }) {
     if (!file) { setError('Choose a PDF or EPUB to upload.'); return; }
     setSaving(true);
     setError('');
-    const { error: err } = await addReadingHubBook(file, { title: title.trim(), author: author.trim() });
+    const { error: err } = await addReadingHubBook(file, { title: title.trim(), author: author.trim(), category });
     setSaving(false);
     if (err) { setError(err); return; }
     handleClose();
@@ -52,6 +55,9 @@ export default function AddBookModal({ open, onClose }) {
           placeholder="Author (optional)"
           className={inputClass}
         />
+        <select value={category} onChange={e => setCategory(e.target.value)} className={inputClass}>
+          {CATEGORY_GROUPS.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+        </select>
         <input
           ref={inputRef}
           type="file"

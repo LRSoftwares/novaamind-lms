@@ -1,9 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutGrid, List, Lightbulb, FileText, FileType, CalendarDays, Star, Plus, MoreVertical, Loader2 } from 'lucide-react';
+import { LayoutGrid, List, Lightbulb, FileText, FileType, CalendarDays, Star, Plus, MoreVertical, Loader2, Play } from 'lucide-react';
 import BookCover from './BookCover';
 import { useData } from '../../../context/DataContext';
-import { STATUS_OPTIONS, CATEGORY_OPTIONS } from './constants';
+import { STATUS_OPTIONS, CATEGORY_GROUPS, groupCategory, SORT_OPTIONS } from './constants';
+
+const selectClass = 'text-sm px-3 py-1.5 rounded-lg border border-[var(--rh-outline-variant)] bg-[var(--rh-surface-container-lowest)] text-[var(--rh-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--rh-primary)]/20 focus:border-[var(--rh-primary)]';
 
 const STATUS_BADGE = {
   'currently-reading': { label: 'CURRENTLY READING', className: 'bg-[var(--rh-primary)] text-[var(--rh-on-primary)]' },
@@ -14,7 +16,7 @@ const STATUS_BADGE = {
 
 const FILE_ICON = { PDF: { Icon: FileText, className: 'text-red-600' }, DOCX: { Icon: FileType, className: 'text-[var(--rh-primary)]' } };
 
-function BookCard({ item, onOpen, onDelete }) {
+function BookCard({ item, ideaCount, onOpen, onContinueReading, onDelete }) {
   const badge = STATUS_BADGE[item.status];
   return (
     <div
@@ -28,10 +30,10 @@ function BookCard({ item, onOpen, onDelete }) {
             <span className={`px-3 py-1 text-[10px] font-bold tracking-wide rounded-full ${badge.className}`}>{badge.label}</span>
           </div>
         )}
-        {item.ideaCount > 0 && (
+        {ideaCount > 0 && (
           <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur rounded-lg px-2 py-1 shadow-sm flex items-center gap-1">
             <Lightbulb className="w-3.5 h-3.5 text-[var(--rh-primary)]" />
-            <span className="text-xs font-bold text-[var(--rh-on-surface)]">{item.ideaCount} Ideas</span>
+            <span className="text-xs font-bold text-[var(--rh-on-surface)]">{ideaCount} Ideas</span>
           </div>
         )}
       </div>
@@ -55,15 +57,24 @@ function BookCard({ item, onOpen, onDelete }) {
                 ))}
               </div>
             </div>
-          ) : item.progress != null ? (
-            <div className="space-y-3">
+          ) : item.status === 'currently-reading' || item.status === 'paused' || item.progress != null ? (
+            <div className="space-y-2">
               <div className="flex justify-between items-center text-xs font-medium">
                 <span className="text-[var(--rh-on-surface-variant)]">Progress</span>
-                <span className="text-[var(--rh-primary)]">{item.progress}%</span>
+                <span className="text-[var(--rh-primary)]">{item.progress ?? 0}%</span>
               </div>
               <div className="h-1.5 w-full bg-[var(--rh-surface-container-high)] rounded-full overflow-hidden">
-                <div className="h-full bg-[var(--rh-primary)] rounded-full" style={{ width: `${item.progress}%` }} />
+                <div className="h-full bg-[var(--rh-primary)] rounded-full" style={{ width: `${item.progress ?? 0}%` }} />
               </div>
+              {item.readingLocation != null && item.totalLocations != null && (
+                <p className="text-[11px] text-[var(--rh-on-surface-variant)]">Chapter {item.readingLocation} of {item.totalLocations}</p>
+              )}
+              <button
+                onClick={e => { e.stopPropagation(); onContinueReading(); }}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-[var(--rh-primary)] py-1.5 rounded-lg border border-[var(--rh-outline-variant)] hover:bg-[var(--rh-surface-container-low)] transition-colors mt-1"
+              >
+                <Play className="w-3 h-3" fill="currentColor" /> Continue Reading
+              </button>
             </div>
           ) : null}
         </div>
@@ -115,16 +126,22 @@ function DocumentCard({ item, onDelete }) {
 
 export default function MyLibrary({ search }) {
   const navigate = useNavigate();
-  const { readingHubItems, addReadingHubItem, trashReadingHubItem } = useData();
+  const { readingHubItems, addReadingHubItem, trashReadingHubItem, readingHubCollections, readingHubCollectionItems, thoughts } = useData();
   const [viewMode, setViewMode] = useState('grid');
   const [categoryFilter, setCategoryFilter] = useState('All');
-  const [statusFilter, setStatusFilter] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [collectionFilter, setCollectionFilter] = useState('all');
+  const [sort, setSort] = useState('recent');
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef(null);
 
-  const toggleStatus = (value) => {
-    setStatusFilter(prev => (prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]));
-  };
+  const ideaCountByItem = useMemo(() => {
+    const map = {};
+    for (const t of thoughts) {
+      if (t.sourceId) map[t.sourceId] = (map[t.sourceId] || 0) + 1;
+    }
+    return map;
+  }, [thoughts]);
 
   const handleDelete = (item) => {
     if (window.confirm(`Move "${item.title}" to Trash?`)) trashReadingHubItem(item.id);
@@ -132,14 +149,26 @@ export default function MyLibrary({ search }) {
 
   const filtered = useMemo(() => {
     let list = readingHubItems.filter(i => !i.deletedAt);
-    if (categoryFilter !== 'All') list = list.filter(i => i.category === categoryFilter);
-    if (statusFilter.length) list = list.filter(i => statusFilter.includes(i.status));
+    if (categoryFilter !== 'All') list = list.filter(i => groupCategory(i.category) === categoryFilter);
+    if (statusFilter !== 'all') list = list.filter(i => i.status === statusFilter);
+    if (collectionFilter !== 'all') {
+      const memberIds = readingHubCollectionItems.filter(ci => ci.collectionId === collectionFilter).map(ci => ci.itemId);
+      list = list.filter(i => memberIds.includes(i.id));
+    }
     if (search?.trim()) {
       const q = search.toLowerCase();
       list = list.filter(i => i.title.toLowerCase().includes(q) || i.author?.toLowerCase().includes(q));
     }
-    return list;
-  }, [readingHubItems, categoryFilter, statusFilter, search]);
+    const sorted = [...list];
+    switch (sort) {
+      case 'title': sorted.sort((a, b) => a.title.localeCompare(b.title)); break;
+      case 'author': sorted.sort((a, b) => (a.author || '').localeCompare(b.author || '')); break;
+      case 'progress': sorted.sort((a, b) => (b.progress ?? -1) - (a.progress ?? -1)); break;
+      case 'ideas': sorted.sort((a, b) => (ideaCountByItem[b.id] || 0) - (ideaCountByItem[a.id] || 0)); break;
+      default: sorted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+    return sorted;
+  }, [readingHubItems, categoryFilter, statusFilter, collectionFilter, sort, search, readingHubCollectionItems, ideaCountByItem]);
 
   const handleFiles = async (fileList) => {
     setUploading(true);
@@ -162,8 +191,8 @@ export default function MyLibrary({ search }) {
       <div className="mb-8 space-y-6">
         <div className="flex items-end justify-between flex-wrap gap-4">
           <div>
-            <h2 className="text-4xl font-bold tracking-tight text-[var(--rh-on-surface)]">My Library</h2>
-            <p className="text-base text-[var(--rh-on-surface-variant)] mt-1">Manage your personalized collection of knowledge.</p>
+            <h2 className="text-4xl font-bold tracking-tight text-[var(--rh-on-surface)]">Library</h2>
+            <p className="text-base text-[var(--rh-on-surface-variant)] mt-1">Everything that shapes how you think.</p>
           </div>
           <div className="flex items-center gap-2 bg-[var(--rh-surface-container-low)] p-1 rounded-xl border border-[var(--rh-outline-variant)]">
             <button
@@ -194,7 +223,7 @@ export default function MyLibrary({ search }) {
           >
             All
           </button>
-          {CATEGORY_OPTIONS.map(cat => (
+          {CATEGORY_GROUPS.map(cat => (
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}
@@ -208,18 +237,17 @@ export default function MyLibrary({ search }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 py-2 border-y border-[var(--rh-outline-variant)]/30">
-          <span className="text-xs font-bold uppercase tracking-wide text-[var(--rh-on-surface-variant)] mr-2">Status:</span>
-          {STATUS_OPTIONS.map(opt => (
-            <label key={opt.value} className="flex items-center gap-2 cursor-pointer group">
-              <input
-                type="checkbox"
-                checked={statusFilter.includes(opt.value)}
-                onChange={() => toggleStatus(opt.value)}
-                className="w-4 h-4 rounded border-[var(--rh-outline-variant)] text-[var(--rh-primary)] focus:ring-[var(--rh-primary)]"
-              />
-              <span className="text-sm text-[var(--rh-on-surface-variant)] group-hover:text-[var(--rh-primary)] transition-colors">{opt.label}</span>
-            </label>
-          ))}
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={selectClass}>
+            <option value="all">All Statuses</option>
+            {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
+          <select value={collectionFilter} onChange={e => setCollectionFilter(e.target.value)} className={selectClass}>
+            <option value="all">All Collections</option>
+            {readingHubCollections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={sort} onChange={e => setSort(e.target.value)} className={selectClass}>
+            {SORT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
         </div>
       </div>
 
@@ -227,7 +255,14 @@ export default function MyLibrary({ search }) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filtered.map(item =>
             item.kind === 'book' ? (
-              <BookCard key={item.id} item={item} onOpen={() => navigate(`/reading-hub/book/${item.id}`)} onDelete={() => handleDelete(item)} />
+              <BookCard
+                key={item.id}
+                item={item}
+                ideaCount={ideaCountByItem[item.id] || 0}
+                onOpen={() => navigate(`/reading-hub/book/${item.id}`)}
+                onContinueReading={() => navigate(`/reading-hub/book/${item.id}`, { state: { tab: 'Read' } })}
+                onDelete={() => handleDelete(item)}
+              />
             ) : (
               <DocumentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
             )
