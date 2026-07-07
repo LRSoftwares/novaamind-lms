@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
-import { ArrowLeft, Play, PlusCircle, Share2, Info, Brain, Wand2, Lightbulb, Plus, Trash2, BookOpen, Pencil } from 'lucide-react';
+import { ArrowLeft, Play, PlusCircle, Share2, Info, Brain, Wand2, Lightbulb, Plus, Trash2, BookOpen, Pencil, FileSpreadsheet } from 'lucide-react';
 import BookCover from './BookCover';
 import EpubReader from './EpubReader';
 import ReadPane from './ReadPane';
 import CaptureThoughtModal from './CaptureThoughtModal';
 import { useData } from '../../../context/DataContext';
+import { exportBookContentIdeasToExcel } from '../../../utils/exportBookExcel';
 
 const TABS = ['Overview', 'Read', 'Ideas', 'Highlights', 'Perspectives', 'Content'];
 
@@ -68,6 +69,7 @@ export default function BookDetail() {
   const [captureSubtype, setCaptureSubtype] = useState('idea');
   const [captureContent, setCaptureContent] = useState('');
   const [editingThought, setEditingThought] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const item = readingHubItems.find(i => i.id === id);
 
   const bookThoughts = useMemo(() => thoughts.filter(t => t.sourceId === item?.id), [thoughts, item?.id]);
@@ -104,6 +106,12 @@ export default function BookDetail() {
   };
 
   const handleOpen = () => updateReadingHubItem(item.id, { lastOpenedAt: new Date().toISOString() });
+
+  const handleExport = () => {
+    if (bookThoughts.length === 0 || exporting) return;
+    setExporting(true);
+    exportBookContentIdeasToExcel(item, bookThoughts).finally(() => setExporting(false));
+  };
 
   const handlePositionChange = ({ cfi, location: readingLocation, totalLocations, percentage }) => {
     const updates = { readingCfi: cfi, lastSavedAt: new Date().toISOString() };
@@ -191,7 +199,20 @@ export default function BookDetail() {
             >
               <Share2 className="w-4.5 h-4.5" /> Add Perspective
             </button>
+            <button
+              onClick={handleExport}
+              disabled={bookThoughts.length === 0 || exporting}
+              title={bookThoughts.length === 0 ? 'No ideas or perspectives available to export yet.' : undefined}
+              className="bg-[var(--rh-surface-container-lowest)] border border-[var(--rh-outline-variant)] text-[var(--rh-on-surface)] px-6 py-3.5 rounded-full font-semibold flex items-center gap-2 hover:bg-[var(--rh-surface-container-low)] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FileSpreadsheet className="w-4.5 h-4.5" /> {exporting ? 'Exporting...' : 'Export Excel'}
+            </button>
           </div>
+          {bookThoughts.length === 0 && (
+            <p className="text-xs text-[var(--rh-on-surface-variant)] -mt-2">
+              No ideas or perspectives available to export yet.
+            </p>
+          )}
 
           <div className="border-b border-[var(--rh-outline-variant)] flex gap-8 overflow-x-auto">
             {TABS.map(tab => (
