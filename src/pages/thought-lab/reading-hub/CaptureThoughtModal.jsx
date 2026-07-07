@@ -32,6 +32,7 @@ export default function CaptureThoughtModal({ open, onClose, initialSource, init
   const [form, setForm] = useState(emptyForm());
   const [moreOpen, setMoreOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -55,6 +56,7 @@ export default function CaptureThoughtModal({ open, onClose, initialSource, init
       setForm({ ...emptyForm(), subtype: initialSubtype || 'thought', content: initialContent || '' });
       setMoreOpen(false);
     }
+    setSaveError('');
   }, [open, editingThought, initialSubtype, initialContent]);
 
   const set = (key) => (e) => setForm(prev => ({ ...prev, [key]: e.target.value }));
@@ -62,6 +64,7 @@ export default function CaptureThoughtModal({ open, onClose, initialSource, init
   const handleSave = async () => {
     if (!form.content.trim()) return;
     setSaving(true);
+    setSaveError('');
     const hasSource = !!initialSource;
     const payload = {
       title: form.title.trim() || form.content.trim().slice(0, 60),
@@ -86,10 +89,9 @@ export default function CaptureThoughtModal({ open, onClose, initialSource, init
       potentialUses: form.potentialUses.split(',').map(t => t.trim()).filter(Boolean),
     };
 
-    if (editingThought) {
-      await updateThought(editingThought.id, payload);
-    } else {
-      await addThought({
+    const result = editingThought
+      ? await updateThought(editingThought.id, payload)
+      : await addThought({
         id: `TH${Date.now()}${Math.random().toString(36).slice(2, 4)}`,
         ...payload,
         originType: initialSource ? (initialSource.sourceType || 'book') : 'own_thought',
@@ -101,8 +103,12 @@ export default function CaptureThoughtModal({ open, onClose, initialSource, init
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
-    }
+
     setSaving(false);
+    if (result?.error) {
+      setSaveError(result.error);
+      return;
+    }
     onClose();
   };
 
@@ -157,6 +163,12 @@ export default function CaptureThoughtModal({ open, onClose, initialSource, init
             </select>
             <input value={form.potentialUses} onChange={set('potentialUses')} placeholder="Potential uses, comma-separated" className={inputClass} />
           </div>
+        )}
+
+        {saveError && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            Couldn't save: {saveError}
+          </p>
         )}
 
         <div className="flex justify-end gap-2 pt-2">
