@@ -1,9 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutGrid, List, Lightbulb, FileText, FileType, CalendarDays, Star, Plus, MoreVertical, Loader2, Play } from 'lucide-react';
+import { LayoutGrid, List, Lightbulb, FileText, FileType, CalendarDays, Star, Plus, Loader2, Play, Pencil, Trash2, Bookmark, ExternalLink, Tag } from 'lucide-react';
 import BookCover from './BookCover';
+import Modal from '../../../components/Modal';
+import RowMenu from '../../../components/RowMenu';
 import { useData } from '../../../context/DataContext';
-import { STATUS_OPTIONS, CATEGORY_GROUPS, groupCategory, SORT_OPTIONS } from './constants';
+import { STATUS_OPTIONS, CATEGORY_GROUPS, groupCategory, GENRE_OPTIONS, SORT_OPTIONS } from './constants';
+
+const UNCATEGORIZED = 'Uncategorized';
 
 const selectClass = 'text-sm px-3 py-1.5 rounded-lg border border-[var(--rh-outline-variant)] bg-[var(--rh-surface-container-lowest)] text-[var(--rh-on-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--rh-primary)]/20 focus:border-[var(--rh-primary)]';
 
@@ -16,8 +20,13 @@ const STATUS_BADGE = {
 
 const FILE_ICON = { PDF: { Icon: FileText, className: 'text-red-600' }, DOCX: { Icon: FileType, className: 'text-[var(--rh-primary)]' } };
 
-function BookCard({ item, ideaCount, onOpen, onContinueReading, onDelete }) {
+function BookCard({ item, ideaCount, onOpen, onContinueReading, onEdit, onManageCollections, onDelete }) {
   const badge = STATUS_BADGE[item.status];
+  const menuItems = [
+    { label: 'Edit Details', icon: <Pencil className="w-3.5 h-3.5" />, onClick: onEdit },
+    { label: 'Add to Collection', icon: <Bookmark className="w-3.5 h-3.5" />, onClick: onManageCollections },
+    { label: 'Move to Trash', icon: <Trash2 className="w-3.5 h-3.5" />, onClick: onDelete, danger: true },
+  ];
   return (
     <div
       onClick={onOpen}
@@ -40,11 +49,14 @@ function BookCard({ item, ideaCount, onOpen, onContinueReading, onDelete }) {
       <div className="p-5 flex-1 flex flex-col">
         <div className="flex justify-between items-start mb-1 gap-2">
           <h3 className="text-lg font-semibold text-[var(--rh-on-surface)] line-clamp-1">{item.title}</h3>
-          <button onClick={e => { e.stopPropagation(); onDelete(); }} className="text-[var(--rh-on-surface-variant)] hover:text-[var(--rh-primary)] transition-colors flex-shrink-0">
-            <MoreVertical className="w-4.5 h-4.5" />
-          </button>
+          <RowMenu items={menuItems} />
         </div>
-        <p className="text-sm text-[var(--rh-on-surface-variant)] mb-4">{item.author}</p>
+        <p className="text-sm text-[var(--rh-on-surface-variant)] mb-1">{item.author}</p>
+        {item.tag && (
+          <span className="inline-flex items-center gap-1 self-start mb-3 px-2 py-0.5 text-[10px] font-bold tracking-wide rounded-md bg-[var(--rh-secondary-container)] text-[var(--rh-on-secondary-container)]">
+            <Tag className="w-2.5 h-2.5" /> {item.tag}
+          </span>
+        )}
         <div className="mt-auto">
           {item.status === 'completed' ? (
             <div className="flex items-center justify-between">
@@ -83,9 +95,15 @@ function BookCard({ item, ideaCount, onOpen, onContinueReading, onDelete }) {
   );
 }
 
-function DocumentCard({ item, onDelete }) {
+function DocumentCard({ item, onEdit, onManageCollections, onDelete }) {
   const fileIcon = FILE_ICON[item.fileType] || { Icon: FileText, className: 'text-[var(--rh-on-surface-variant)]' };
   const Icon = fileIcon.Icon;
+  const menuItems = [
+    ...(item.storagePath ? [{ label: 'Open', icon: <ExternalLink className="w-3.5 h-3.5" />, onClick: () => window.open(item.storagePath, '_blank', 'noopener,noreferrer') }] : []),
+    { label: 'Edit Details', icon: <Pencil className="w-3.5 h-3.5" />, onClick: onEdit },
+    { label: 'Add to Collection', icon: <Bookmark className="w-3.5 h-3.5" />, onClick: onManageCollections },
+    { label: 'Move to Trash', icon: <Trash2 className="w-3.5 h-3.5" />, onClick: onDelete, danger: true },
+  ];
   return (
     <div
       onClick={() => item.storagePath && window.open(item.storagePath, '_blank', 'noopener,noreferrer')}
@@ -102,12 +120,15 @@ function DocumentCard({ item, onDelete }) {
       <div className="p-5 flex-1 flex flex-col">
         <div className="flex justify-between items-start mb-1 gap-2">
           <h3 className="text-lg font-semibold text-[var(--rh-on-surface)] line-clamp-2">{item.title}</h3>
-          <button onClick={e => { e.stopPropagation(); onDelete(); }} className="text-[var(--rh-on-surface-variant)] hover:text-[var(--rh-primary)] transition-colors flex-shrink-0">
-            <MoreVertical className="w-4.5 h-4.5" />
-          </button>
+          <RowMenu items={menuItems} />
         </div>
         <p className="text-sm text-[var(--rh-on-surface-variant)] mb-4">{item.author}</p>
         <div className="mt-auto flex items-center gap-2 flex-wrap">
+          {item.tag && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold tracking-wide rounded-md bg-[var(--rh-secondary-container)] text-[var(--rh-on-secondary-container)]">
+              <Tag className="w-2.5 h-2.5" /> {item.tag}
+            </span>
+          )}
           {(item.chips || []).map(chip => (
             <span
               key={chip}
@@ -124,16 +145,120 @@ function DocumentCard({ item, onDelete }) {
   );
 }
 
+const inputClass = 'w-full text-sm border border-[var(--rh-outline-variant)] rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--rh-primary)]/20 focus:border-[var(--rh-primary)]';
+
+function EditItemModal({ item, onClose, onSave }) {
+  const [title, setTitle] = useState(item.title || '');
+  const [author, setAuthor] = useState(item.author || '');
+  const [tag, setTag] = useState(item.tag || '');
+  const [status, setStatus] = useState(item.status || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!title.trim()) return;
+    setSaving(true);
+    const updates = { title: title.trim(), author: author.trim() || null, tag: tag.trim() || null };
+    if (item.kind === 'book') updates.status = status || null;
+    await onSave(updates);
+    setSaving(false);
+    onClose();
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Edit Details">
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-semibold text-gray-500 mb-1 block">Title</label>
+          <input autoFocus value={title} onChange={e => setTitle(e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-gray-500 mb-1 block">Author</label>
+          <input value={author} onChange={e => setAuthor(e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="text-xs font-semibold text-gray-500 mb-1 block">Genre / Category</label>
+          <input
+            list="genre-options-datalist"
+            value={tag}
+            onChange={e => setTag(e.target.value)}
+            placeholder="e.g. Business, Philosophy, Macroeconomics"
+            className={inputClass}
+          />
+          <datalist id="genre-options-datalist">
+            {GENRE_OPTIONS.map(g => <option key={g} value={g} />)}
+          </datalist>
+        </div>
+        {item.kind === 'book' && (
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">Status</label>
+            <select value={status} onChange={e => setStatus(e.target.value)} className={inputClass}>
+              <option value="">—</option>
+              {STATUS_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+          </div>
+        )}
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !title.trim()}
+            className="px-5 py-2 bg-[var(--rh-primary)] text-[var(--rh-on-primary)] text-sm font-semibold rounded-lg hover:brightness-110 disabled:opacity-50 transition-all"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ManageCollectionsModal({ item, collections, memberCollectionIds, onToggle, onClose }) {
+  return (
+    <Modal open onClose={onClose} title={`Collections · ${item.title}`}>
+      <div className="space-y-1 max-h-[50vh] overflow-y-auto -mx-1 px-1">
+        {collections.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-6">No collections yet. Create one from the Collections page.</p>
+        ) : (
+          collections.map(c => {
+            const checked = memberCollectionIds.includes(c.id);
+            return (
+              <label key={c.id} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                <input type="checkbox" checked={checked} onChange={() => onToggle(c.id, checked)} className="w-4 h-4" />
+                <span className="text-sm text-gray-800">{c.name}</span>
+              </label>
+            );
+          })
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 export default function MyLibrary({ search }) {
   const navigate = useNavigate();
-  const { readingHubItems, addReadingHubItem, trashReadingHubItem, readingHubCollections, readingHubCollectionItems, thoughts } = useData();
+  const {
+    readingHubItems, addReadingHubItem, updateReadingHubItem, trashReadingHubItem,
+    readingHubCollections, readingHubCollectionItems, addItemToCollection, removeItemFromCollection, thoughts,
+  } = useData();
   const [viewMode, setViewMode] = useState('grid');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('all');
   const [collectionFilter, setCollectionFilter] = useState('all');
+  const [genreFilter, setGenreFilter] = useState('all');
   const [sort, setSort] = useState('recent');
   const [uploading, setUploading] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [collectionsItem, setCollectionsItem] = useState(null);
   const inputRef = useRef(null);
+
+  const genreList = useMemo(() => {
+    const used = new Set(readingHubItems.filter(i => !i.deletedAt && i.tag).map(i => i.tag));
+    const hasUncategorized = readingHubItems.some(i => !i.deletedAt && !i.tag);
+    const genres = Array.from(used).sort();
+    return hasUncategorized ? [...genres, UNCATEGORIZED] : genres;
+  }, [readingHubItems]);
 
   const ideaCountByItem = useMemo(() => {
     const map = {};
@@ -147,10 +272,18 @@ export default function MyLibrary({ search }) {
     if (window.confirm(`Move "${item.title}" to Trash?`)) trashReadingHubItem(item.id);
   };
 
+  const handleSaveEdit = (updates) => updateReadingHubItem(editingItem.id, updates);
+
+  const handleToggleCollection = (collectionId, isMember) => {
+    if (isMember) removeItemFromCollection(collectionId, collectionsItem.id);
+    else addItemToCollection(collectionId, collectionsItem.id);
+  };
+
   const filtered = useMemo(() => {
     let list = readingHubItems.filter(i => !i.deletedAt);
     if (categoryFilter !== 'All') list = list.filter(i => groupCategory(i.category) === categoryFilter);
     if (statusFilter !== 'all') list = list.filter(i => i.status === statusFilter);
+    if (genreFilter !== 'all') list = list.filter(i => (i.tag || UNCATEGORIZED) === genreFilter);
     if (collectionFilter !== 'all') {
       const memberIds = readingHubCollectionItems.filter(ci => ci.collectionId === collectionFilter).map(ci => ci.itemId);
       list = list.filter(i => memberIds.includes(i.id));
@@ -168,7 +301,7 @@ export default function MyLibrary({ search }) {
       default: sorted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
     return sorted;
-  }, [readingHubItems, categoryFilter, statusFilter, collectionFilter, sort, search, readingHubCollectionItems, ideaCountByItem]);
+  }, [readingHubItems, categoryFilter, statusFilter, genreFilter, collectionFilter, sort, search, readingHubCollectionItems, ideaCountByItem]);
 
   const handleFiles = async (fileList) => {
     setUploading(true);
@@ -245,6 +378,10 @@ export default function MyLibrary({ search }) {
             <option value="all">All Collections</option>
             {readingHubCollections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+          <select value={genreFilter} onChange={e => setGenreFilter(e.target.value)} className={selectClass}>
+            <option value="all">All Genres</option>
+            {genreList.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
           <select value={sort} onChange={e => setSort(e.target.value)} className={selectClass}>
             {SORT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </select>
@@ -261,10 +398,18 @@ export default function MyLibrary({ search }) {
                 ideaCount={ideaCountByItem[item.id] || 0}
                 onOpen={() => navigate(`/reading-hub/book/${item.id}`)}
                 onContinueReading={() => navigate(`/reading-hub/book/${item.id}`, { state: { tab: 'Read' } })}
+                onEdit={() => setEditingItem(item)}
+                onManageCollections={() => setCollectionsItem(item)}
                 onDelete={() => handleDelete(item)}
               />
             ) : (
-              <DocumentCard key={item.id} item={item} onDelete={() => handleDelete(item)} />
+              <DocumentCard
+                key={item.id}
+                item={item}
+                onEdit={() => setEditingItem(item)}
+                onManageCollections={() => setCollectionsItem(item)}
+                onDelete={() => handleDelete(item)}
+              />
             )
           )}
           <div
@@ -294,18 +439,18 @@ export default function MyLibrary({ search }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-[var(--rh-on-surface)] truncate">{item.title}</p>
-                <p className="text-xs text-[var(--rh-on-surface-variant)] truncate">{item.author} · {item.category}</p>
+                <p className="text-xs text-[var(--rh-on-surface-variant)] truncate">{item.author} · {item.category}{item.tag ? ` · ${item.tag}` : ''}</p>
               </div>
               {item.progress != null && (
                 <span className="text-xs font-bold text-[var(--rh-primary)] flex-shrink-0">{item.progress}%</span>
               )}
-              <button
-                onClick={e => { e.stopPropagation(); handleDelete(item); }}
-                className="p-2 rounded-lg hover:bg-red-50 text-[var(--rh-on-surface-variant)] hover:text-red-500 flex-shrink-0"
-                title="Move to Trash"
-              >
-                <MoreVertical className="w-4 h-4" />
-              </button>
+              <RowMenu
+                items={[
+                  { label: 'Edit Details', icon: <Pencil className="w-3.5 h-3.5" />, onClick: () => setEditingItem(item) },
+                  { label: 'Add to Collection', icon: <Bookmark className="w-3.5 h-3.5" />, onClick: () => setCollectionsItem(item) },
+                  { label: 'Move to Trash', icon: <Trash2 className="w-3.5 h-3.5" />, onClick: () => handleDelete(item), danger: true },
+                ]}
+              />
             </div>
           ))}
           {filtered.length === 0 && (
@@ -320,6 +465,20 @@ export default function MyLibrary({ search }) {
       >
         {uploading ? <Loader2 className="w-7 h-7 animate-spin" /> : <Plus className="w-7 h-7" />}
       </button>
+
+      {editingItem && (
+        <EditItemModal item={editingItem} onClose={() => setEditingItem(null)} onSave={handleSaveEdit} />
+      )}
+
+      {collectionsItem && (
+        <ManageCollectionsModal
+          item={collectionsItem}
+          collections={readingHubCollections}
+          memberCollectionIds={readingHubCollectionItems.filter(ci => ci.itemId === collectionsItem.id).map(ci => ci.collectionId)}
+          onToggle={handleToggleCollection}
+          onClose={() => setCollectionsItem(null)}
+        />
+      )}
     </div>
   );
 }

@@ -10,6 +10,14 @@ export const STATUS_OPTIONS = [
 
 export const CATEGORY_OPTIONS = ['Books', 'Reports', 'Research Papers', 'Whitepapers'];
 
+// Subject/genre tagging (stored on item.tag) — suggested list, not exhaustive.
+// Users can type any custom genre; these just seed the picker.
+export const GENRE_OPTIONS = [
+  'Business', 'Strategy', 'Leadership', 'Philosophy', 'Psychology',
+  'Self-Help', 'Economics', 'Macroeconomics', 'Finance', 'History',
+  'Biography', 'Technology', 'Spirituality', 'Politics',
+];
+
 // UI grouping only — underlying item.category values are untouched.
 export const CATEGORY_GROUPS = ['Books', 'Reports', 'Research', 'Other'];
 
