@@ -4,6 +4,7 @@ import { Plus, Edit2, Trash2, Search, X, Copy, ExternalLink, ChevronDown, Chevro
 import { useData } from '../context/DataContext';
 import Modal from '../components/Modal';
 import { exportWorksheetSubmissionPdf } from '../utils/worksheetExport';
+import { isPersonalityWorksheet, computeCategoryScores, CATEGORY_SUMMARIES } from '../lib/personalityProfile';
 
 const QUESTION_TYPES = ['ShortAnswer', 'LongAnswer', 'MultipleChoice', 'Checklist', 'Rating'];
 const QUESTION_TYPE_LABELS = {
@@ -313,6 +314,12 @@ export default function Worksheets() {
       const candidate = candidates.find(c => c.id === sub?.candidateId);
       const responses = worksheetResponses.filter(r => r.submissionId === selectedSubmission);
       const qs = worksheetQuestions.filter(q => q.worksheetId === viewingSubmissions).sort((a, b) => a.sortOrder - b.sortOrder);
+      const isProfile = isPersonalityWorksheet(qs);
+      const parseAnswer = (raw) => { let a = raw; try { if (typeof a === 'string') a = JSON.parse(a); } catch {} return a; };
+      const ranked = isProfile
+        ? computeCategoryScores(qs, responses.reduce((acc, r) => { acc[r.questionId] = parseAnswer(r.answer); return acc; }, {}))
+        : [];
+      const primary = ranked[0];
 
       return (
         <div>
@@ -349,6 +356,34 @@ export default function Worksheets() {
               <p className="text-sm font-medium">{sub?.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '—'}</p>
             </div>
           </div>
+
+          {isProfile && primary && (
+            <div className="bg-white rounded-xl border border-gray-100 p-5 mb-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0" style={{ background: primary.color }}>
+                  {primary.category[0]}
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-400 font-medium">Primary Type</p>
+                  <p className="text-base font-semibold text-gray-900">{primary.category}</p>
+                </div>
+              </div>
+              {CATEGORY_SUMMARIES[primary.category] && <p className="text-sm text-gray-600 mb-4">{CATEGORY_SUMMARIES[primary.category]}</p>}
+              <div className="space-y-2">
+                {ranked.map(cat => (
+                  <div key={cat.category}>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-xs font-medium" style={{ color: cat.color }}>{cat.category}</span>
+                      <span className="text-xs text-gray-400 tabular-nums">{cat.total} / {cat.max} · {cat.pct}%</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${cat.pct}%`, background: cat.color }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-4">
             {qs.map((q, idx) => {
