@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BookOpen, CalendarDays, Building2, GraduationCap, BarChart3, LogOut, Menu, ChevronLeft, Plug, ClipboardCheck, FlaskConical, Library, Receipt } from 'lucide-react';
+import { LayoutDashboard, BookOpen, CalendarDays, Building2, GraduationCap, BarChart3, LogOut, Menu, ChevronLeft, Plug, ClipboardCheck, FileText, FlaskConical, Library, Receipt } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
@@ -9,6 +9,7 @@ const navItems = [
   { path: '/companies', icon: Building2, label: 'Companies' },
   { path: '/trainers', icon: GraduationCap, label: 'Trainers' },
   { path: '/assessments', icon: ClipboardCheck, label: 'Assessments' },
+  { path: '/worksheets', icon: FileText, label: 'Worksheets' },
   { path: '/thought-lab', icon: FlaskConical, label: 'Thought Lab' },
   { path: '/reading-hub', icon: Library, label: 'Reading Hub' },
   { path: '/reports', icon: BarChart3, label: 'Reports' },

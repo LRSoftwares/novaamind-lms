@@ -12,6 +12,7 @@ import Trainers from './pages/Trainers';
 import Integrations from './pages/Integrations';
 import Invoices from './pages/Invoices';
 import Assessments from './pages/Assessments';
+import Worksheets from './pages/Worksheets';
 import ThoughtLabApp from './pages/thought-lab/ThoughtLabApp';
 import ReadingHubApp from './pages/thought-lab/reading-hub/ReadingHubApp';
 import Login from './pages/Login';
@@ -20,6 +21,10 @@ import AssessmentRegister from './pages/AssessmentRegister';
 import AssessmentVerifyOtp from './pages/AssessmentVerifyOtp';
 import AssessmentPlayer from './pages/AssessmentPlayer';
 import AssessmentResult from './pages/AssessmentResult';
+import WorksheetLanding from './pages/WorksheetLanding';
+import WorksheetRegister from './pages/WorksheetRegister';
+import WorksheetPlayer from './pages/WorksheetPlayer';
+import WorksheetResult from './pages/WorksheetResult';
 
 function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -36,6 +41,7 @@ function AdminLayout() {
             <Route path="/companies" element={<Company />} />
             <Route path="/trainers" element={<Trainers />} />
             <Route path="/assessments" element={<Assessments />} />
+            <Route path="/worksheets" element={<Worksheets />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/integrations" element={<Integrations />} />
@@ -81,6 +87,10 @@ function AppRoutes() {
       <Route path="/assessment/:slug/verify" element={<AssessmentVerifyOtp />} />
       <Route path="/assessment/:slug/test" element={<AssessmentPlayer />} />
       <Route path="/assessment/:slug/result" element={<AssessmentResult />} />
+      <Route path="/worksheet/:slug" element={<WorksheetLanding />} />
+      <Route path="/worksheet/:slug/register" element={<WorksheetRegister />} />
+      <Route path="/worksheet/:slug/fill" element={<WorksheetPlayer />} />
+      <Route path="/worksheet/:slug/result" element={<WorksheetResult />} />
       <Route path="/*" element={<AuthGate />} />
     </Routes>
   );

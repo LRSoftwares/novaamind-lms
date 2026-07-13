@@ -34,6 +34,12 @@ export function DataProvider({ children }) {
   const [assessmentAttempts, setAssessmentAttempts] = useState([]);
   const [assessmentResponses, setAssessmentResponses] = useState([]);
   const [assessmentLinks, setAssessmentLinks] = useState([]);
+  const [worksheets, setWorksheets] = useState([]);
+  const [worksheetQuestions, setWorksheetQuestions] = useState([]);
+  const [worksheetCandidates, setWorksheetCandidates] = useState([]);
+  const [worksheetSubmissions, setWorksheetSubmissions] = useState([]);
+  const [worksheetResponses, setWorksheetResponses] = useState([]);
+  const [worksheetLinks, setWorksheetLinks] = useState([]);
   const [thoughts, setThoughts] = useState([]);
   const [readingHubItems, setReadingHubItems] = useState([]);
   const [readingHubIdeas, setReadingHubIdeas] = useState([]);
@@ -46,7 +52,7 @@ export function DataProvider({ children }) {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes, asmRes, aqRes, acRes, aaRes, arRes, alRes, thRes, rhiRes, rhdRes, rhpRes, rhcRes, rhciRes] = await Promise.all([
+      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes, asmRes, aqRes, acRes, aaRes, arRes, alRes, wsRes, wqRes, wcRes, wsubRes, wrRes, wlRes, thRes, rhiRes, rhdRes, rhpRes, rhcRes, rhciRes] = await Promise.all([
         supabase.from('employees').select('*').order('name'),
         supabase.from('trainers').select('*').order('name'),
         supabase.from('programs').select('*').order('name'),
@@ -74,6 +80,12 @@ export function DataProvider({ children }) {
         supabase.from('assessment_attempts').select('*').order('created_at', { ascending: false }),
         supabase.from('assessment_responses').select('*'),
         supabase.from('assessment_links').select('*'),
+        supabase.from('worksheets').select('*').order('created_at', { ascending: false }),
+        supabase.from('worksheet_questions').select('*').order('sort_order'),
+        supabase.from('worksheet_candidates').select('*').order('registered_at', { ascending: false }),
+        supabase.from('worksheet_submissions').select('*').order('created_at', { ascending: false }),
+        supabase.from('worksheet_responses').select('*'),
+        supabase.from('worksheet_links').select('*'),
         supabase.from('thoughts').select('*').order('updated_at', { ascending: false }),
         supabase.from('reading_hub_items').select('*').order('created_at', { ascending: false }),
         supabase.from('reading_hub_ideas').select('*').order('created_at'),
@@ -117,6 +129,12 @@ export function DataProvider({ children }) {
       setAssessmentAttempts(toCamel(aaRes.data || []));
       setAssessmentResponses(toCamel(arRes.data || []));
       setAssessmentLinks(toCamel(alRes.data || []));
+      setWorksheets(toCamel(wsRes.data || []));
+      setWorksheetQuestions(toCamel(wqRes.data || []));
+      setWorksheetCandidates(toCamel(wcRes.data || []));
+      setWorksheetSubmissions(toCamel(wsubRes.data || []));
+      setWorksheetResponses(toCamel(wrRes.data || []));
+      setWorksheetLinks(toCamel(wlRes.data || []));
       setThoughts(toCamel(thRes.data || []));
       setReadingHubItems(toCamel(rhiRes.data || []));
       setReadingHubIdeas(toCamel(rhdRes.data || []));
@@ -593,6 +611,75 @@ export function DataProvider({ children }) {
     return { error };
   }
 
+  // ---- Worksheets ----
+  async function addWorksheet(w) {
+    const payload = toSnake(w);
+    const { data, error } = await supabase.from('worksheets').insert(payload).select();
+    if (!error && data) setWorksheets(prev => [...toCamel(data), ...prev]);
+    return { data: data ? toCamel(data[0]) : null, error };
+  }
+
+  async function updateWorksheet(id, updates) {
+    const { data, error } = await supabase.from('worksheets').update({ ...toSnake(updates), updated_at: new Date().toISOString() }).eq('id', id).select();
+    if (!error && data) setWorksheets(prev => prev.map(w => w.id === id ? toCamel(data[0]) : w));
+    return { error };
+  }
+
+  async function deleteWorksheet(id) {
+    const { error } = await supabase.from('worksheets').delete().eq('id', id);
+    if (!error) {
+      setWorksheets(prev => prev.filter(w => w.id !== id));
+      setWorksheetQuestions(prev => prev.filter(q => q.worksheetId !== id));
+      setWorksheetLinks(prev => prev.filter(l => l.worksheetId !== id));
+    }
+    return { error };
+  }
+
+  async function publishWorksheet(id) {
+    const slug = `${id.toLowerCase()}-${Math.random().toString(36).slice(2, 8)}`;
+    const linkId = `WL${Date.now()}`;
+    const { error: wErr } = await supabase.from('worksheets').update({ status: 'Published', published_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
+    if (wErr) return { error: wErr };
+    const { data: linkData, error: lErr } = await supabase.from('worksheet_links').insert({ id: linkId, worksheet_id: id, slug, is_active: true }).select();
+    if (!lErr && linkData) setWorksheetLinks(prev => [...prev, ...toCamel(linkData)]);
+    setWorksheets(prev => prev.map(w => w.id === id ? { ...w, status: 'Published', publishedAt: new Date().toISOString() } : w));
+    return { slug, error: lErr };
+  }
+
+  // ---- Worksheet Questions ----
+  async function addWorksheetQuestion(q) {
+    const payload = toSnake(q);
+    const { data, error } = await supabase.from('worksheet_questions').insert(payload).select();
+    if (!error && data) setWorksheetQuestions(prev => [...prev, ...toCamel(data)]);
+    return { data: data ? toCamel(data[0]) : null, error };
+  }
+
+  async function updateWorksheetQuestion(id, updates) {
+    const { data, error } = await supabase.from('worksheet_questions').update(toSnake(updates)).eq('id', id).select();
+    if (!error && data) setWorksheetQuestions(prev => prev.map(q => q.id === id ? toCamel(data[0]) : q));
+    return { error };
+  }
+
+  async function deleteWorksheetQuestion(id) {
+    const { error } = await supabase.from('worksheet_questions').delete().eq('id', id);
+    if (!error) setWorksheetQuestions(prev => prev.filter(q => q.id !== id));
+    return { error };
+  }
+
+  async function bulkAddWorksheetQuestions(questions) {
+    const payload = questions.map(q => toSnake(q));
+    const { data, error } = await supabase.from('worksheet_questions').insert(payload).select();
+    if (!error && data) setWorksheetQuestions(prev => [...prev, ...toCamel(data)]);
+    return { data: data ? toCamel(data) : null, error };
+  }
+
+  // ---- Worksheet Links ----
+  async function deleteWorksheetLink(id) {
+    const { error } = await supabase.from('worksheet_links').delete().eq('id', id);
+    if (!error) setWorksheetLinks(prev => prev.filter(l => l.id !== id));
+    return { error };
+  }
+
   // ---- Thoughts ----
   async function addThought(t) {
     const payload = toSnake(t);
@@ -855,6 +942,10 @@ export function DataProvider({ children }) {
     assessmentCandidates, assessmentAttempts, updateAssessmentAttempt,
     assessmentResponses, updateAssessmentResponse,
     assessmentLinks, deleteAssessmentLink,
+    worksheets, addWorksheet, updateWorksheet, deleteWorksheet, publishWorksheet,
+    worksheetQuestions, addWorksheetQuestion, updateWorksheetQuestion, deleteWorksheetQuestion, bulkAddWorksheetQuestions,
+    worksheetCandidates, worksheetSubmissions, worksheetResponses,
+    worksheetLinks, deleteWorksheetLink,
     thoughts, addThought, updateThought, deleteThought,
     readingHubItems, addReadingHubItem, addReadingHubBook, updateReadingHubItem, trashReadingHubItem, restoreReadingHubItem, permanentlyDeleteReadingHubItem,
     readingHubIdeas, addReadingHubIdea, updateReadingHubIdea, deleteReadingHubIdea,
