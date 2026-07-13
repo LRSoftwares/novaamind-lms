@@ -15,6 +15,19 @@ import Assessments from './pages/Assessments';
 import Worksheets from './pages/Worksheets';
 import ThoughtLabApp from './pages/thought-lab/ThoughtLabApp';
 import ReadingHubApp from './pages/thought-lab/reading-hub/ReadingHubApp';
+import CompanyOS from './pages/company-os/CompanyOS';
+import LegalSystemsLayout from './pages/company-os/LegalSystemsLayout';
+import LegalOverview from './pages/company-os/LegalOverview';
+import LegalDocuments from './pages/company-os/LegalDocuments';
+import LegalTemplates from './pages/company-os/LegalTemplates';
+import LegalDocumentDetail from './pages/company-os/LegalDocumentDetail';
+import NdaLanding from './pages/company-os/nda/NdaLanding';
+import NdaWizard from './pages/company-os/nda/NdaWizard';
+import ProspectingLayout from './pages/prospecting/ProspectingLayout';
+import ProspectsList from './pages/prospecting/ProspectsList';
+import ResearchQueue from './pages/prospecting/ResearchQueue';
+import ReviewedList from './pages/prospecting/ReviewedList';
+import ProspectDetail from './pages/prospecting/ProspectDetail';
 import Login from './pages/Login';
 import AssessmentLanding from './pages/AssessmentLanding';
 import AssessmentRegister from './pages/AssessmentRegister';
@@ -36,6 +49,22 @@ function AdminLayout() {
         <div className="p-6">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/company-os" element={<CompanyOS />} />
+            <Route path="/company-os/legal" element={<LegalSystemsLayout />}>
+              <Route index element={<LegalOverview />} />
+              <Route path="documents" element={<LegalDocuments />} />
+              <Route path="nda" element={<NdaLanding />} />
+              <Route path="templates" element={<LegalTemplates />} />
+            </Route>
+            <Route path="/company-os/legal/nda/new" element={<NdaWizard />} />
+            <Route path="/company-os/legal/document/:id" element={<LegalDocumentDetail />} />
+            <Route path="/company-os/legal/template/:id" element={<LegalDocumentDetail isTemplate />} />
+            <Route path="/prospecting" element={<ProspectingLayout />}>
+              <Route index element={<ProspectsList />} />
+              <Route path="research" element={<ResearchQueue />} />
+              <Route path="reviewed" element={<ReviewedList />} />
+            </Route>
+            <Route path="/prospecting/:id" element={<ProspectDetail />} />
             <Route path="/programs" element={<Programs />} />
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/companies" element={<Company />} />

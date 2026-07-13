@@ -46,13 +46,16 @@ export function DataProvider({ children }) {
   const [readingHubPerspectives, setReadingHubPerspectives] = useState([]);
   const [readingHubCollections, setReadingHubCollections] = useState([]);
   const [readingHubCollectionItems, setReadingHubCollectionItems] = useState([]);
+  const [legalTemplates, setLegalTemplates] = useState([]);
+  const [legalDocuments, setLegalDocuments] = useState([]);
+  const [prospects, setProspects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState('connecting');
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes, asmRes, aqRes, acRes, aaRes, arRes, alRes, wsRes, wqRes, wcRes, wsubRes, wrRes, wlRes, thRes, rhiRes, rhdRes, rhpRes, rhcRes, rhciRes] = await Promise.all([
+      const [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes, snRes, saRes, baRes, bmRes, sasgRes, spRes, ssRes, kdRes, ksRes, kpRes, kcRes, asmRes, aqRes, acRes, aaRes, arRes, alRes, wsRes, wqRes, wcRes, wsubRes, wrRes, wlRes, thRes, rhiRes, rhdRes, rhpRes, rhcRes, rhciRes, ltRes, ldRes, psRes] = await Promise.all([
         supabase.from('employees').select('*').order('name'),
         supabase.from('trainers').select('*').order('name'),
         supabase.from('programs').select('*').order('name'),
@@ -92,6 +95,9 @@ export function DataProvider({ children }) {
         supabase.from('reading_hub_perspectives').select('*').order('created_at', { ascending: false }),
         supabase.from('reading_hub_collections').select('*').order('created_at'),
         supabase.from('reading_hub_collection_items').select('*'),
+        supabase.from('legal_templates').select('*').order('created_at'),
+        supabase.from('legal_documents').select('*').order('updated_at', { ascending: false }),
+        supabase.from('prospects').select('*').order('updated_at', { ascending: false }),
       ]);
 
       const allResults = [empRes, trRes, prRes, seRes, enRes, coRes, pfRes, esRes, isRes, nlRes];
@@ -141,6 +147,9 @@ export function DataProvider({ children }) {
       setReadingHubPerspectives(toCamel(rhpRes.data || []));
       setReadingHubCollections(toCamel(rhcRes.data || []));
       setReadingHubCollectionItems(toCamel(rhciRes.data || []));
+      setLegalTemplates(toCamel(ltRes.data || []));
+      setLegalDocuments(toCamel(ldRes.data || []));
+      setProspects(toCamel(psRes.data || []));
 
       const filesMap = {};
       (pfRes.data || []).forEach(f => {
@@ -907,6 +916,96 @@ export function DataProvider({ children }) {
     return { error: error?.message };
   }
 
+  // ---- Legal Documents (Company OS) ----
+  async function addLegalDocument(doc) {
+    const row = {
+      id: `LD${Date.now()}${Math.random().toString(36).slice(2, 4)}`,
+      title: doc.title,
+      category: doc.category,
+      type: doc.type,
+      status: 'Draft',
+      content: doc.content || { type: 'doc', content: [] },
+      template_id: doc.templateId || null,
+      owner: doc.owner || '',
+      version: '1.0',
+      structured_data: doc.structuredData || null,
+    };
+    const { data, error } = await supabase.from('legal_documents').insert(row).select();
+    if (error) { console.error('[LMS] addLegalDocument error:', error); return { error: error.message }; }
+    setLegalDocuments(prev => [toCamel(data[0]), ...prev]);
+    return { data: toCamel(data[0]), error: null };
+  }
+  async function updateLegalDocument(id, updates) {
+    const payload = { ...toSnake(updates), updated_at: new Date().toISOString() };
+    const { data, error } = await supabase.from('legal_documents').update(payload).eq('id', id).select();
+    if (error) { console.error('[LMS] updateLegalDocument error:', error); return { error: error.message }; }
+    setLegalDocuments(prev => prev.map(d => d.id === id ? toCamel(data[0]) : d));
+    return { data: toCamel(data[0]), error: null };
+  }
+  async function deleteLegalDocument(id) {
+    const { error } = await supabase.from('legal_documents').delete().eq('id', id);
+    if (!error) setLegalDocuments(prev => prev.filter(d => d.id !== id));
+    return { error: error?.message };
+  }
+
+  // ---- Legal Templates (Company OS) ----
+  async function addLegalTemplate(tpl) {
+    const row = {
+      id: `LT${Date.now()}${Math.random().toString(36).slice(2, 4)}`,
+      name: tpl.name,
+      category: tpl.category,
+      type: tpl.type,
+      description: tpl.description || '',
+      priority: tpl.priority || 'P2',
+      content: tpl.content || { type: 'doc', content: [] },
+      version: '1.0',
+    };
+    const { data, error } = await supabase.from('legal_templates').insert(row).select();
+    if (error) { console.error('[LMS] addLegalTemplate error:', error); return { error: error.message }; }
+    setLegalTemplates(prev => [toCamel(data[0]), ...prev]);
+    return { data: toCamel(data[0]), error: null };
+  }
+  async function updateLegalTemplate(id, updates) {
+    const payload = { ...toSnake(updates), updated_at: new Date().toISOString() };
+    const { data, error } = await supabase.from('legal_templates').update(payload).eq('id', id).select();
+    if (error) { console.error('[LMS] updateLegalTemplate error:', error); return { error: error.message }; }
+    setLegalTemplates(prev => prev.map(t => t.id === id ? toCamel(data[0]) : t));
+    return { data: toCamel(data[0]), error: null };
+  }
+  async function deleteLegalTemplate(id) {
+    const { error } = await supabase.from('legal_templates').delete().eq('id', id);
+    if (!error) setLegalTemplates(prev => prev.filter(t => t.id !== id));
+    return { error: error?.message };
+  }
+
+  // ---- Prospecting ----
+  async function addProspect(p) {
+    const row = { id: `PR${Date.now()}${Math.random().toString(36).slice(2, 4)}`, ...toSnake(p) };
+    const { data, error } = await supabase.from('prospects').insert(row).select();
+    if (error) { console.error('[LMS] addProspect error:', error); return { error: error.message }; }
+    setProspects(prev => [toCamel(data[0]), ...prev]);
+    return { data: toCamel(data[0]), error: null };
+  }
+  async function bulkImportProspects(list) {
+    const rows = list.map(p => ({ id: `PR${Date.now()}${Math.random().toString(36).slice(2, 5)}`, ...toSnake(p) }));
+    const { data, error } = await supabase.from('prospects').insert(rows).select();
+    if (error) { console.error('[LMS] bulkImportProspects error:', error); return { error: error.message }; }
+    setProspects(prev => [...toCamel(data), ...prev]);
+    return { data: toCamel(data), error: null };
+  }
+  async function updateProspect(id, updates) {
+    const payload = { ...toSnake(updates), updated_at: new Date().toISOString() };
+    const { data, error } = await supabase.from('prospects').update(payload).eq('id', id).select();
+    if (error) { console.error('[LMS] updateProspect error:', error); return { error: error.message }; }
+    setProspects(prev => prev.map(p => p.id === id ? toCamel(data[0]) : p));
+    return { data: toCamel(data[0]), error: null };
+  }
+  async function deleteProspect(id) {
+    const { error } = await supabase.from('prospects').delete().eq('id', id);
+    if (!error) setProspects(prev => prev.filter(p => p.id !== id));
+    return { error: error?.message };
+  }
+
   // ---- Assessment Responses (admin grading) ----
   async function updateAssessmentResponse(id, updates) {
     const { data, error } = await supabase.from('assessment_responses').update(toSnake(updates)).eq('id', id).select();
@@ -952,6 +1051,9 @@ export function DataProvider({ children }) {
     readingHubPerspectives, addReadingHubPerspective, updateReadingHubPerspective, deleteReadingHubPerspective,
     readingHubCollections, addReadingHubCollection, updateReadingHubCollection, deleteReadingHubCollection,
     readingHubCollectionItems, addItemToCollection, removeItemFromCollection,
+    legalTemplates, addLegalTemplate, updateLegalTemplate, deleteLegalTemplate,
+    legalDocuments, addLegalDocument, updateLegalDocument, deleteLegalDocument,
+    prospects, addProspect, bulkImportProspects, updateProspect, deleteProspect,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

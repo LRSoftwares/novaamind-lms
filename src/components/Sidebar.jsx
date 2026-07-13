@@ -1,9 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BookOpen, CalendarDays, Building2, GraduationCap, BarChart3, LogOut, Menu, ChevronLeft, Plug, ClipboardCheck, FileText, FlaskConical, Library, Receipt } from 'lucide-react';
+import { LayoutDashboard, BookOpen, CalendarDays, Building2, Building, GraduationCap, BarChart3, LogOut, Menu, ChevronLeft, Plug, ClipboardCheck, FileText, FlaskConical, Library, Receipt, UserSearch } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/company-os', icon: Building, label: 'Company OS' },
+  { path: '/prospecting', icon: UserSearch, label: 'Prospecting' },
   { path: '/programs', icon: BookOpen, label: 'Programs' },
   { path: '/sessions', icon: CalendarDays, label: 'Sessions' },
   { path: '/companies', icon: Building2, label: 'Companies' },

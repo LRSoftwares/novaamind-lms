@@ -32,8 +32,9 @@ function Divider() {
   return <div className="w-px h-5 bg-gray-200 mx-0.5 flex-shrink-0" />;
 }
 
-export default function RichTextEditor({ value, onChange, placeholder = 'Start writing your thought...' }) {
+export default function RichTextEditor({ value, onChange, placeholder = 'Start writing your thought...', editable = true }) {
   const editor = useEditor({
+    editable,
     extensions: [
       StarterKit,
       Underline,
@@ -53,6 +54,10 @@ export default function RichTextEditor({ value, onChange, placeholder = 'Start w
       onChange?.(editor.getJSON(), editor.getText());
     },
   });
+
+  useEffect(() => {
+    editor?.setEditable(editable);
+  }, [editor, editable]);
 
   useEffect(() => {
     if (!editor || !value) return;
