@@ -3,6 +3,8 @@
 // game-like fill experience and a computed results breakdown (mirrors the standalone
 // Personality Profile Assessment Game).
 
+import { stripHtmlTags } from './richTextUtils';
+
 export const CATEGORY_COLORS = {
   Planner: '#e8b800',
   Connector: '#1a3fd4',
@@ -26,7 +28,7 @@ export function categoryColor(category, indexHint = 0) {
 }
 
 export function parseTrait(questionText) {
-  const parts = (questionText || '').split(SEPARATOR);
+  const parts = stripHtmlTags(questionText).split(SEPARATOR);
   if (parts.length < 2) return null;
   const category = parts[0].trim();
   const rest = parts.slice(1).join(' — ').trim();

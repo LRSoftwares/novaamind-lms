@@ -4,6 +4,7 @@ import { GraduationCap, CheckCircle2, AlertCircle, Download } from 'lucide-react
 import { fetchSubmissionResult } from '../lib/worksheetApi';
 import { exportWorksheetSubmissionPdf } from '../utils/worksheetExport';
 import { isPersonalityWorksheet, computeCategoryScores, CATEGORY_SUMMARIES } from '../lib/personalityProfile';
+import WorksheetRichTextRenderer from '../components/worksheets/WorksheetRichTextRenderer';
 
 function parseAnswer(raw) {
   let answer = raw;
@@ -170,7 +171,7 @@ export default function WorksheetResult() {
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-sm font-medium text-gray-500">Q{idx + 1}</span>
                 </div>
-                <p className="text-gray-900 text-sm mb-3">{q.questionText}</p>
+                <WorksheetRichTextRenderer html={q.questionText} className="text-sm mb-3" />
                 <div className="bg-gray-50 rounded-lg p-3 text-sm">
                   <p className="font-medium">{Array.isArray(answer) ? answer.join(', ') : (answer ?? 'No answer')}</p>
                 </div>

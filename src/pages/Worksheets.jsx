@@ -5,6 +5,9 @@ import { useData } from '../context/DataContext';
 import Modal from '../components/Modal';
 import { exportWorksheetSubmissionPdf } from '../utils/worksheetExport';
 import { isPersonalityWorksheet, computeCategoryScores, CATEGORY_SUMMARIES } from '../lib/personalityProfile';
+import { stripHtmlTags, toEditableHtml } from '../lib/richTextUtils';
+import WorksheetRichTextEditor from '../components/worksheets/WorksheetRichTextEditor';
+import WorksheetRichTextRenderer from '../components/worksheets/WorksheetRichTextRenderer';
 
 const QUESTION_TYPES = ['ShortAnswer', 'LongAnswer', 'MultipleChoice', 'Checklist', 'Rating'];
 const QUESTION_TYPE_LABELS = {
@@ -64,6 +67,7 @@ export default function Worksheets() {
     programs, worksheets, worksheetQuestions, worksheetCandidates, worksheetSubmissions, worksheetResponses, worksheetLinks,
     addWorksheet, updateWorksheet, deleteWorksheet, publishWorksheet,
     addWorksheetQuestion, updateWorksheetQuestion, deleteWorksheetQuestion, deleteWorksheetLink, bulkAddWorksheetQuestions,
+    uploadWorksheetQuestionImage,
   } = useData();
 
   const [search, setSearch] = useState('');
@@ -171,7 +175,7 @@ export default function Worksheets() {
     if (!form.title.trim()) return;
 
     let finalQuestions = [...questions];
-    if (editingQ && qForm.questionText.trim()) {
+    if (editingQ && stripHtmlTags(qForm.questionText)) {
       const q = {
         ...qForm,
         id: editingQ.id,
@@ -295,7 +299,7 @@ export default function Worksheets() {
 
   const startEditQuestion = (q) => {
     setQForm({
-      questionType: q.questionType, questionText: q.questionText,
+      questionType: q.questionType, questionText: toEditableHtml(q.questionText),
       options: q.options?.length ? q.options : [{ id: '1', text: '' }, { id: '2', text: '' }],
       required: q.required !== false,
     });
@@ -397,7 +401,7 @@ export default function Worksheets() {
                     <span className="text-sm font-medium text-gray-500">Q{idx + 1}</span>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">{QUESTION_TYPE_LABELS[q.questionType]}</span>
                   </div>
-                  <p className="text-gray-900 mb-3">{q.questionText}</p>
+                  <WorksheetRichTextRenderer html={q.questionText} className="mb-3" />
                   <div className="bg-gray-50 rounded-lg p-3 text-sm">
                     <p className="text-xs text-gray-500 mb-1">Response</p>
                     <p className="font-medium">{Array.isArray(answer) ? answer.join(', ') : (answer ?? 'No answer')}</p>
@@ -648,7 +652,7 @@ export default function Worksheets() {
               <div key={q.id} className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
                 <span className="text-xs text-gray-400 font-mono w-6">{idx + 1}</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">{QUESTION_TYPE_LABELS[q.questionType]}</span>
-                <span className="flex-1 text-sm text-gray-700 truncate">{q.questionText || 'Untitled question'}</span>
+                <span className="flex-1 text-sm text-gray-700 truncate">{stripHtmlTags(q.questionText) || 'Untitled question'}</span>
                 {q.required === false && <span className="text-xs text-gray-400">optional</span>}
                 <button onClick={() => startEditQuestion(q)} className="p-1 hover:bg-gray-200 rounded"><Edit2 className="w-3.5 h-3.5 text-gray-500" /></button>
                 <button onClick={() => removeQuestion(q.id)} className="p-1 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5 text-red-400" /></button>
@@ -680,7 +684,13 @@ export default function Worksheets() {
 
                 <div className="mb-3">
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Question / Prompt Text *</label>
-                  <textarea value={qForm.questionText} onChange={(e) => setQForm(f => ({ ...f, questionText: e.target.value }))} rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder="Enter your question or prompt..." />
+                  <WorksheetRichTextEditor
+                    value={qForm.questionText}
+                    onChange={(html) => setQForm(f => ({ ...f, questionText: html }))}
+                    worksheetId={editing || 'draft'}
+                    onUploadImage={uploadWorksheetQuestionImage}
+                    placeholder="Enter your question or prompt..."
+                  />
                 </div>
 
                 {/* MultipleChoice / Checklist Options */}
@@ -704,7 +714,7 @@ export default function Worksheets() {
                 )}
 
                 <div className="flex items-center gap-2">
-                  <button onClick={saveQuestion} disabled={!qForm.questionText.trim()} className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">Save Question</button>
+                  <button onClick={saveQuestion} disabled={!stripHtmlTags(qForm.questionText)} className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">Save Question</button>
                   <button onClick={() => setEditingQ(null)} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5">Cancel</button>
                 </div>
               </div>

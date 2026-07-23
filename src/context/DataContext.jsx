@@ -682,6 +682,15 @@ export function DataProvider({ children }) {
     return { data: data ? toCamel(data) : null, error };
   }
 
+  async function uploadWorksheetQuestionImage(worksheetId, file) {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `worksheet-images/${worksheetId}/${Date.now()}_${safeName}`;
+    const { error: uploadErr } = await supabase.storage.from('program-files').upload(filePath, file);
+    if (uploadErr) { console.error('[LMS] worksheet image upload error:', uploadErr); return { error: uploadErr }; }
+    const { data: urlData } = supabase.storage.from('program-files').getPublicUrl(filePath);
+    return { url: urlData.publicUrl };
+  }
+
   // ---- Worksheet Links ----
   async function deleteWorksheetLink(id) {
     const { error } = await supabase.from('worksheet_links').delete().eq('id', id);
@@ -1043,6 +1052,7 @@ export function DataProvider({ children }) {
     assessmentLinks, deleteAssessmentLink,
     worksheets, addWorksheet, updateWorksheet, deleteWorksheet, publishWorksheet,
     worksheetQuestions, addWorksheetQuestion, updateWorksheetQuestion, deleteWorksheetQuestion, bulkAddWorksheetQuestions,
+    uploadWorksheetQuestionImage,
     worksheetCandidates, worksheetSubmissions, worksheetResponses,
     worksheetLinks, deleteWorksheetLink,
     thoughts, addThought, updateThought, deleteThought,

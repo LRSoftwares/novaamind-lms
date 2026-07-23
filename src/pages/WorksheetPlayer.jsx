@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Send, AlertTriangle, GraduationCap, Save, CheckCircle2 } from 'lucide-react';
 import { fetchWorksheetBySlug, fetchSubmissionProgress, saveProgress, submitWorksheetResponses } from '../lib/worksheetApi';
 import { isPersonalityWorksheet, groupByCategory } from '../lib/personalityProfile';
+import WorksheetRichTextRenderer from '../components/worksheets/WorksheetRichTextRenderer';
 
 export default function WorksheetPlayer() {
   const { slug } = useParams();
@@ -315,7 +316,7 @@ export default function WorksheetPlayer() {
             </div>
 
             <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
-              <p className="text-gray-900 text-base leading-relaxed mb-6">{currentQ.questionText}</p>
+              <WorksheetRichTextRenderer html={currentQ.questionText} className="text-base leading-relaxed mb-6" />
 
               {/* MultipleChoice */}
               {currentQ.questionType === 'MultipleChoice' && (
